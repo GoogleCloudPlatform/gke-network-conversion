@@ -27,20 +27,52 @@ import (
 )
 
 const (
-	LocationParentPath = "projects/%s/locations/%s"
-	ClusterParentPath  = LocationParentPath + "/clusters/%s"
-	RelativeNodePoolPath = "/nodePools/%s"
-	NodePoolParentPath = ClusterParentPath + RelativeNodePoolPath
-	OperationParent    = LocationParentPath + "/operations/%s"
+	/*
+	 A Path is a string that identifies a resource or a parent path for zero or
+	 more resources used by some GCE and GKE APIs.
+	 In the APIs, the path is either referenced as "parent" for calls which operate
+	 or return multiple resources (e.g. List), or "name" for calls acting on a
+	 specific resource (e.g. Get).
 
-	DefaultVersion								 = "-"
-	AnyLocation										 = "-"
+	 Example: https://cloud.google.com/kubernetes-engine/docs/reference/rest/v1beta1/projects.locations.clusters/updateMaster#path-parameters
+	*/
+	locationPath  = "projects/%s/locations/%s"
+	clusterPath   = locationPath + "/clusters/%s"
+	nodePoolPath  = clusterPath + "/nodePools/%s"
+	operationPath = locationPath + "/operations/%s"
+
+	// GKE version constants
+	// See: https://cloud.google.com/kubernetes-engine/docs/reference/rest/v1beta1/projects.locations.clusters/updateMaster#request-body
+	DefaultVersion = "-"
+	AnyLocation    = "-"
 )
 
 var (
 	zoneFormat = regexp.MustCompile(`\w+-\w+-\w`)
 )
 
+// LocationPath returns the path to a project/location.
+// Location may be a region or zone.
+func LocationPath(project, location string) string {
+	return fmt.Sprintf(locationPath, project, location)
+}
+
+// ClusterPath returns a path to a project/location/cluster.
+func ClusterPath(project, location, cluster string) string {
+	return fmt.Sprintf(clusterPath, project, location, cluster)
+}
+
+// NodePoolPath returns a path to a project/location/cluster/nodePool.
+func NodePoolPath(project, location, cluster, name string) string {
+	return fmt.Sprintf(nodePoolPath, project, location, cluster, name)
+}
+
+// OperationPath returns a path to a project/location/operation.
+func OperationsPath(project, location, name string) string {
+	return fmt.Sprintf(operationPath, project, location, name)
+}
+
+// ComputeService mirrors a (sub)set of the generated Compute Service APIs.
 type ComputeService interface {
 	GetInstanceGroupManager(ctx context.Context, project, location, instanceGroupManager string, opts ...googleapi.CallOption) (*compute.InstanceGroupManager, error)
 	GetInstanceTemplate(ctx context.Context, project, name string, opts ...googleapi.CallOption) (*compute.InstanceTemplate, error)
@@ -50,6 +82,7 @@ type ComputeService interface {
 	ListNetworks(ctx context.Context, project string) ([]*compute.Network, error)
 }
 
+// ContainerService mirrors a (sub)set of the generated Container Service APIs.
 type ContainerService interface {
 	UpdateMaster(ctx context.Context, req *container.UpdateMasterRequest, opts ...googleapi.CallOption) (*container.Operation, error)
 	GetCluster(ctx context.Context, name string, opts ...googleapi.CallOption) (*container.Cluster, error)
@@ -61,7 +94,7 @@ type ContainerService interface {
 	ListNodePools(ctx context.Context, name string, opts ...googleapi.CallOption) (*container.ListNodePoolsResponse, error)
 }
 
-type Compute struct{
+type Compute struct {
 	V1    *compute.Service
 	Alpha *computealpha.Service
 }
@@ -73,12 +106,12 @@ func (c *Compute) GetInstanceGroupManager(ctx context.Context, project, location
 	return c.V1.RegionInstanceGroupManagers.Get(project, location, instanceGroupManager).Context(ctx).Do(opts...)
 }
 
-func (c *Compute) GetInstanceTemplate (ctx context.Context, project, instanceTemplate string, opts ...googleapi.CallOption) (*compute.InstanceTemplate, error) {
+func (c *Compute) GetInstanceTemplate(ctx context.Context, project, instanceTemplate string, opts ...googleapi.CallOption) (*compute.InstanceTemplate, error) {
 	return c.V1.InstanceTemplates.Get(project, instanceTemplate).Context(ctx).Do(opts...)
 }
 
 // SwitchToCustomMode transparently uses computealpha.Service.SwitchToCustomMode.
-func (c *Compute) SwitchToCustomMode(ctx context.Context, project, name string, opts ...googleapi.CallOption) (*compute.Operation, error){
+func (c *Compute) SwitchToCustomMode(ctx context.Context, project, name string, opts ...googleapi.CallOption) (*compute.Operation, error) {
 	resp, err := c.Alpha.Networks.SwitchToCustomMode(project, name).Context(ctx).Do(opts...)
 	if err != nil {
 		return nil, err
@@ -86,11 +119,11 @@ func (c *Compute) SwitchToCustomMode(ctx context.Context, project, name string, 
 	return c.GetGlobalOperation(ctx, project, resp.Name, opts...)
 }
 
-func (c *Compute) GetGlobalOperation(ctx context.Context, project, name string, opts ...googleapi.CallOption) (*compute.Operation, error){
+func (c *Compute) GetGlobalOperation(ctx context.Context, project, name string, opts ...googleapi.CallOption) (*compute.Operation, error) {
 	return c.V1.GlobalOperations.Get(project, name).Context(ctx).Do(opts...)
 }
 
-func (c *Compute) WaitOperation(ctx context.Context, project string, op *compute.Operation, opts ...googleapi.CallOption) (*compute.Operation, error){
+func (c *Compute) WaitOperation(ctx context.Context, project string, op *compute.Operation, opts ...googleapi.CallOption) (*compute.Operation, error) {
 	switch {
 	case op.Zone != "":
 		return c.V1.ZoneOperations.Wait(project, op.Zone, op.Name).Context(ctx).Do(opts...)
@@ -101,60 +134,44 @@ func (c *Compute) WaitOperation(ctx context.Context, project string, op *compute
 	}
 }
 
-func (c *Compute) ListNetworks(ctx context.Context, project string) (networks []*compute.Network, err error) {
-	networks = make([]*compute.Network, 0)
+func (c *Compute) ListNetworks(ctx context.Context, project string) ([]*compute.Network, error) {
+	networks := make([]*compute.Network, 0)
 	req := c.V1.Networks.List(project)
-	err = req.Pages(ctx, func(page *compute.NetworkList) error {
+	err := req.Pages(ctx, func(page *compute.NetworkList) error {
 		for _, network := range page.Items {
 			networks = append(networks, network)
 		}
 		return nil
 	})
-	return
+	return networks, err
 }
 
-type Container struct{
-	V1    *container.Service
+type Container struct {
+	V1 *container.Service
 }
 
-func (c *Container) UpdateMaster(ctx context.Context, req *container.UpdateMasterRequest, opts ...googleapi.CallOption) (*container.Operation, error){
+func (c *Container) UpdateMaster(ctx context.Context, req *container.UpdateMasterRequest, opts ...googleapi.CallOption) (*container.Operation, error) {
 	return c.V1.Projects.Locations.Clusters.UpdateMaster(req.Name, req).Context(ctx).Do(opts...)
 }
-func (c *Container) GetCluster(ctx context.Context, name string, opts ...googleapi.CallOption) (*container.Cluster, error){
+func (c *Container) GetCluster(ctx context.Context, name string, opts ...googleapi.CallOption) (*container.Cluster, error) {
 	return c.V1.Projects.Locations.Clusters.Get(name).Context(ctx).Do(opts...)
 }
-func (c *Container) ListClusters(ctx context.Context, parent string, opts ...googleapi.CallOption) (*container.ListClustersResponse, error){
+func (c *Container) ListClusters(ctx context.Context, parent string, opts ...googleapi.CallOption) (*container.ListClustersResponse, error) {
 	return c.V1.Projects.Locations.Clusters.List(parent).Context(ctx).Do(opts...)
 }
-func (c *Container) GetOperation(ctx context.Context, name string, opts ...googleapi.CallOption) (*container.Operation, error){
+func (c *Container) GetOperation(ctx context.Context, name string, opts ...googleapi.CallOption) (*container.Operation, error) {
 	return c.V1.Projects.Locations.Operations.Get(name).Context(ctx).Do(opts...)
 }
-func (c *Container) UpdateNodePool(ctx context.Context, req *container.UpdateNodePoolRequest, opts ...googleapi.CallOption) (*container.Operation, error){
+func (c *Container) UpdateNodePool(ctx context.Context, req *container.UpdateNodePoolRequest, opts ...googleapi.CallOption) (*container.Operation, error) {
 	return c.V1.Projects.Locations.Clusters.NodePools.Update(req.Name, req).Context(ctx).Do(opts...)
 }
-func (c *Container) ListNodePools(ctx context.Context, name string, opts ...googleapi.CallOption) (*container.ListNodePoolsResponse, error){
+func (c *Container) ListNodePools(ctx context.Context, name string, opts ...googleapi.CallOption) (*container.ListNodePoolsResponse, error) {
 	return c.V1.Projects.Locations.Clusters.NodePools.List(name).Context(ctx).Do(opts...)
 }
 
 type Clients struct {
-	Compute      ComputeService
-	Container		 ContainerService
-}
-
-func LocationParent(project, location string) string {
-	return fmt.Sprintf(LocationParentPath, project, location)
-}
-
-func ClusterParent(project, location, cluster string) string {
-	return fmt.Sprintf(ClusterParentPath,  project, location, cluster)
-}
-
-func NodePoolParent(project, location, cluster, name string) string {
-	return fmt.Sprintf(NodePoolParentPath, project, location, cluster, name)
-}
-
-func OperationsParent(project, location, name string) string {
-	return fmt.Sprintf(OperationParent, project, location, name)
+	Compute   ComputeService
+	Container ContainerService
 }
 
 func IsZonal(location string) bool {

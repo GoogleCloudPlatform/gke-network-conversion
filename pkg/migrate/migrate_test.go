@@ -31,7 +31,7 @@ func TestMigrate(t *testing.T) {
 	cancel()
 
 	select {
-	case <- cancelled.Done():
+	case <-cancelled.Done():
 	}
 
 	cases := []struct {
@@ -39,7 +39,7 @@ func TestMigrate(t *testing.T) {
 		migrators []Migrator
 		ctx       context.Context
 		wantErr   string
-		wantLog  string
+		wantLog   string
 	}{
 		{
 			desc: "Empty migrators",

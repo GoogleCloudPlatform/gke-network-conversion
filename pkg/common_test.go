@@ -23,27 +23,27 @@ import (
 
 func TestLocationParent(t *testing.T) {
 	cases := []struct {
-		desc string
-		project string
+		desc     string
+		project  string
 		location string
-		want string
+		want     string
 	}{
 		{
-			desc: "Project-Location x-y",
-			project: "x",
+			desc:     "Project-Location x-y",
+			project:  "x",
 			location: "y",
-			want: "projects/x/locations/y",
+			want:     "projects/x/locations/y",
 		},
 		{
-			desc: "Project-Location z-dash",
-			project: "z",
+			desc:     "Project-Location z-dash",
+			project:  "z",
 			location: "-",
-			want: "projects/z/locations/-",
+			want:     "projects/z/locations/-",
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.desc, func(t *testing.T) {
-			got := LocationParent(tc.project, tc.location)
+			got := LocationPath(tc.project, tc.location)
 			if diff := cmp.Diff(tc.want, got); diff != "" {
 				t.Fatalf("output differed:\n%s", diff)
 			}
@@ -53,30 +53,30 @@ func TestLocationParent(t *testing.T) {
 
 func TestClusterParent(t *testing.T) {
 	cases := []struct {
-		desc string
-		project string
+		desc     string
+		project  string
 		location string
-		cluster string
-		want string
+		cluster  string
+		want     string
 	}{
 		{
-			desc: "Project-Location-Cluster x-y-c",
-			project: "x",
+			desc:     "Project-Location-Cluster x-y-c",
+			project:  "x",
 			location: "y",
-			cluster: "c",
-			want: "projects/x/locations/y/clusters/c",
+			cluster:  "c",
+			want:     "projects/x/locations/y/clusters/c",
 		},
 		{
-			desc: "Project-Location-Cluster z-dash-c",
-			project: "z",
+			desc:     "Project-Location-Cluster z-dash-c",
+			project:  "z",
 			location: "-",
-			cluster: "c",
-			want: "projects/z/locations/-/clusters/c",
+			cluster:  "c",
+			want:     "projects/z/locations/-/clusters/c",
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.desc, func(t *testing.T) {
-			got := ClusterParent(tc.project, tc.location, tc.cluster)
+			got := ClusterPath(tc.project, tc.location, tc.cluster)
 			if diff := cmp.Diff(tc.want, got); diff != "" {
 				t.Fatalf("output differed:\n%s", diff)
 			}
@@ -86,33 +86,33 @@ func TestClusterParent(t *testing.T) {
 
 func TestNodePoolParent(t *testing.T) {
 	cases := []struct {
-		desc string
-		project string
+		desc     string
+		project  string
 		location string
-		cluster string
+		cluster  string
 		nodePool string
-		want string
+		want     string
 	}{
 		{
-			desc: "Project-Location-Cluster-NodePool x-y-c-p",
-			project: "x",
+			desc:     "Project-Location-Cluster-NodePool x-y-c-p",
+			project:  "x",
 			location: "y",
-			cluster: "c",
+			cluster:  "c",
 			nodePool: "p",
-			want: "projects/x/locations/y/clusters/c/nodePools/p",
+			want:     "projects/x/locations/y/clusters/c/nodePools/p",
 		},
 		{
-			desc: "Project-Location-Cluster-NodePool z-dash-c-np",
-			project: "z",
+			desc:     "Project-Location-Cluster-NodePool z-dash-c-np",
+			project:  "z",
 			location: "-",
-			cluster: "c",
+			cluster:  "c",
 			nodePool: "np",
-			want: "projects/z/locations/-/clusters/c/nodePools/np",
+			want:     "projects/z/locations/-/clusters/c/nodePools/np",
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.desc, func(t *testing.T) {
-			got := NodePoolParent(tc.project, tc.location, tc.cluster, tc.nodePool)
+			got := NodePoolPath(tc.project, tc.location, tc.cluster, tc.nodePool)
 			if diff := cmp.Diff(tc.want, got); diff != "" {
 				t.Fatalf("output differed:\n%s", diff)
 			}
@@ -122,30 +122,30 @@ func TestNodePoolParent(t *testing.T) {
 
 func TestOperations(t *testing.T) {
 	cases := []struct {
-		desc string
-		project string
-		location string
+		desc      string
+		project   string
+		location  string
 		operation string
-		want string
+		want      string
 	}{
 		{
-			desc: "Project-Location-Cluster x-y-c",
-			project: "x",
-			location: "y",
+			desc:      "Project-Location-Cluster x-y-c",
+			project:   "x",
+			location:  "y",
 			operation: "c",
-			want: "projects/x/locations/y/operations/c",
+			want:      "projects/x/locations/y/operations/c",
 		},
 		{
-			desc: "Project-Location-Cluster z-dash-c",
-			project: "z",
-			location: "-",
+			desc:      "Project-Location-Cluster z-dash-c",
+			project:   "z",
+			location:  "-",
 			operation: "c",
-			want: "projects/z/locations/-/operations/c",
+			want:      "projects/z/locations/-/operations/c",
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.desc, func(t *testing.T) {
-			got := OperationsParent(tc.project, tc.location, tc.operation)
+			got := OperationsPath(tc.project, tc.location, tc.operation)
 			if diff := cmp.Diff(tc.want, got); diff != "" {
 				t.Fatalf("output differed:\n%s", diff)
 			}

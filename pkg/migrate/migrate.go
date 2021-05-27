@@ -33,7 +33,7 @@ type Migrator interface {
 func Run(ctx context.Context, sem chan struct{}, migrators ...Migrator) error {
 	var (
 		err error
-		wg = sync.WaitGroup{}
+		wg  = sync.WaitGroup{}
 	)
 
 Loop:

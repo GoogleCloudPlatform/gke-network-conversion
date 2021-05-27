@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	ProjectFlag = "project"
+	ProjectFlag           = "project"
 	ContainerBasePathFlag = "container-base-url"
 )
 
@@ -33,7 +33,7 @@ var (
 var rootCmd = &cobra.Command{
 	Use:   "legacynetwork",
 	Short: "Migrate GCE Legacy Networks and GKE Clusters to VPC networks.",
-	Long: `Use migrate subcommand.`,
+	Long:  `Use migrate subcommand.`,
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
