@@ -17,6 +17,7 @@ package operations
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"time"
@@ -44,45 +45,8 @@ type Operation interface {
 
 // OperationStatus is a distillation of a GCP Operation status (which vary by API).
 type OperationStatus struct {
-	Name   string
 	Status string
 	Error  string
-}
-
-// Wrapper contains distilled status information for a GCP Operation.
-type Wrapper struct {
-	ProjectID string
-	Path      string
-
-	// Operation holds the struct.
-	// This may be referenced in the provided Poll function.
-	Operation interface{}
-
-	// Poll fetches the operation and converts the Operation's status to an OperationStatus.
-	// A function allows for having only a single Operation implementation,
-	// rather than per-operation type.
-	Poll func(ctx context.Context, o *Wrapper) (OperationStatus, error)
-}
-
-// IsFinished determines whether the underlying operation has completed.
-func (o *Wrapper) IsFinished(ctx context.Context) (bool, error) {
-	status, err := o.Poll(ctx, o)
-	if err != nil {
-		return false, fmt.Errorf("error polling for %s: %w", o.String(), err)
-	}
-
-	if status.Status != StatusDone {
-		return false, nil
-	}
-
-	if status.Error != "" {
-		return false, fmt.Errorf("error(s) for Operation %s: %s", o.String(), status.Error)
-	}
-	return true, nil
-}
-
-func (o *Wrapper) String() string {
-	return o.Path
 }
 
 type Handler interface {
@@ -126,4 +90,20 @@ func (h HandlerImpl) Wait(ctx context.Context, op Operation) error {
 // ObtainID attempts to retrieve an operation name from the error.
 func ObtainID(err error) string {
 	return operationRegex.FindString(err.Error())
+}
+
+func IsFinished(ctx context.Context, poll func(ctx context.Context) (OperationStatus, error)) (bool, error) {
+	status, err := poll(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	if status.Status != StatusDone {
+		return false, nil
+	}
+
+	if status.Error != "" {
+		return true, errors.New(status.Error)
+	}
+	return true, nil
 }

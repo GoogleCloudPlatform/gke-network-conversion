@@ -21,7 +21,6 @@ import (
 	"testing"
 	"time"
 
-	"legacymigration/pkg"
 	"legacymigration/test"
 )
 
@@ -156,62 +155,71 @@ func TestWait(t *testing.T) {
 			},
 			wantErr: "context error",
 		},
-		{
-			desc: "Wrapper success",
-			ctx:  ctx,
-			op: &Wrapper{
-				ProjectID: test.ProjectID,
-				Path:      pkg.OperationsPath(test.ProjectID, test.RegionA, test.GenericOperationName),
-				Poll: func(ctx context.Context, o *Wrapper) (OperationStatus, error) {
-					return OperationStatus{
-						Status: StatusDone,
-					}, nil
-				},
-			},
-			h: HandlerImpl{
-				interval: 1 * time.Nanosecond,
-				deadline: 1 * time.Millisecond,
-			},
-		},
-		{
-			desc: "Wrapper poll error",
-			ctx:  ctx,
-			op: &Wrapper{
-				ProjectID: test.ProjectID,
-				Path:      pkg.OperationsPath(test.ProjectID, test.RegionA, test.GenericOperationName),
-				Poll: func(ctx context.Context, o *Wrapper) (OperationStatus, error) {
-					return OperationStatus{}, errors.New("polling error")
-				},
-			},
-			h: HandlerImpl{
-				interval: 1 * time.Nanosecond,
-				deadline: 1 * time.Millisecond,
-			},
-			wantErr: "error polling for",
-		},
-		{
-			desc: "Wrapper status error",
-			ctx:  ctx,
-			op: &Wrapper{
-				ProjectID: test.ProjectID,
-				Path:      pkg.OperationsPath(test.ProjectID, test.RegionA, test.GenericOperationName),
-				Poll: func(ctx context.Context, o *Wrapper) (OperationStatus, error) {
-					return OperationStatus{
-						Status: StatusDone,
-						Error:  "operation error",
-					}, nil
-				},
-			},
-			h: HandlerImpl{
-				interval: 1 * time.Nanosecond,
-				deadline: 1 * time.Millisecond,
-			},
-			wantErr: "error(s) for Operation ",
-		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.desc, func(t *testing.T) {
 			err := tc.h.Wait(tc.ctx, tc.op)
+			if diff := test.ErrorDiff(tc.wantErr, err); diff != "" {
+				t.Errorf("HandlerImpl.Wait diff (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestIsFinished(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	cases := []struct {
+		desc    string
+		ctx     context.Context
+		poll    func(ctx context.Context) (OperationStatus, error)
+		want    bool
+		wantErr string
+	}{
+		{
+			desc: "operation finished",
+			ctx:  ctx,
+			poll: func(ctx context.Context) (OperationStatus, error) {
+				return OperationStatus{Status: StatusDone}, nil
+			},
+			want: true,
+		},
+		{
+			desc: "operation not finished",
+			ctx:  ctx,
+			poll: func(ctx context.Context) (OperationStatus, error) {
+				return OperationStatus{Status: "Not Finished"}, nil
+			},
+			want: false,
+		},
+		{
+			desc: "operation error",
+			ctx:  ctx,
+			poll: func(ctx context.Context) (OperationStatus, error) {
+				return OperationStatus{Status: StatusDone, Error: "operation error"}, nil
+			},
+			want:    true,
+			wantErr: "operation error",
+		},
+		{
+			desc: "poll error",
+			ctx:  ctx,
+			poll: func(ctx context.Context) (OperationStatus, error) {
+				return OperationStatus{}, errors.New("polling error")
+			},
+			want:    false,
+			wantErr: "polling error",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			got, err := IsFinished(tc.ctx, tc.poll)
+
+			if got != tc.want {
+				t.Errorf("IsFinished diff; wanted: %v, got: %v", tc.want, got)
+			}
+
 			if diff := test.ErrorDiff(tc.wantErr, err); diff != "" {
 				t.Errorf("HandlerImpl.Wait diff (-want +got):\n%s", diff)
 			}
