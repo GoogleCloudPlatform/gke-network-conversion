@@ -37,3 +37,7 @@ func ErrorDiff(want string, got error) string {
 	}
 	return ""
 }
+
+func SelfLink(endpoint, path string) string {
+	return fmt.Sprintf("%s/%s", endpoint, path)
+}

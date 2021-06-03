@@ -49,6 +49,7 @@ const (
 
 var (
 	zoneFormat = regexp.MustCompile(`\w+-\w+-\w`)
+	PathRegex  = regexp.MustCompile(`projects/.*$`)
 )
 
 // LocationPath returns the path to a project/location.
