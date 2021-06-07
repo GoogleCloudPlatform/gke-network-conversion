@@ -17,6 +17,7 @@ package networks
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -36,6 +37,8 @@ func TestNetworkMigrator_Migrate(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	clients := test.DefaultClients()
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
 
 	legacyNetwork := &compute.Network{
 		Name:      test.SelectedNetwork,
@@ -53,7 +56,99 @@ func TestNetworkMigrator_Migrate(t *testing.T) {
 			ctx:  ctx,
 			m:    testMigrator(legacyNetwork, clients),
 		},
-		// further tests incoming in another pull.
+		{
+			desc: "ListClusterError",
+			ctx:  ctx,
+			m: testMigrator(
+				legacyNetwork,
+				func(clients *pkg.Clients) *pkg.Clients {
+					clients.Container.(*test.FakeContainer).ListClustersErr = errors.New("list cluster err")
+					return clients
+				}(test.DefaultClients()),
+			),
+			wantErr: "list cluster err",
+		},
+		{
+			desc: "Missing zones",
+			ctx:  ctx,
+			m: testMigrator(
+				legacyNetwork,
+				func(clients *pkg.Clients) *pkg.Clients {
+					clients.Container.(*test.FakeContainer).ListClustersResp = &container.ListClustersResponse{
+						Clusters:     []*container.Cluster{&test.PrePatchCluster},
+						MissingZones: []string{"zone-0-a", "zone-1-b"},
+					}
+					return clients
+				}(test.DefaultClients()),
+			),
+		},
+		{
+			desc: "VPC Network",
+			ctx:  ctx,
+			m:    testMigrator(&compute.Network{Name: test.SelectedNetwork}, clients),
+		},
+		{
+			desc: "SwitchToCustomMode error",
+			ctx:  ctx,
+			m: testMigrator(
+				legacyNetwork,
+				func(clients *pkg.Clients) *pkg.Clients {
+					clients.Compute.(*test.FakeCompute).SwitchToCustomModeErr = errors.New("not allowlisted")
+					clients.Compute.(*test.FakeCompute).GetGlobalOperationErr = errors.New("not found")
+					return clients
+				}(test.DefaultClients()),
+			),
+			wantErr: "not allowlisted",
+		},
+		{
+			desc: "SwitchToCustomMode in progress",
+			ctx:  ctx,
+			m: testMigrator(
+				legacyNetwork,
+				func(clients *pkg.Clients) *pkg.Clients {
+					clients.Compute.(*test.FakeCompute).SwitchToCustomModeErr = errors.New("operation: operation-abc-123 already in progress")
+					return clients
+				}(test.DefaultClients()),
+			),
+		},
+		{
+			desc: "SwitchToCustomMode fails",
+			ctx:  ctx,
+			m: testMigrator(
+				legacyNetwork,
+				func(clients *pkg.Clients) *pkg.Clients {
+					clients.Compute.(*test.FakeCompute).WaitOperationResp = &compute.Operation{
+						Name:   test.GenericOperationName,
+						Status: test.OperationDone,
+						Error: &compute.OperationError{
+							Errors: []*compute.OperationErrorErrors{
+								{Message: "switch to custom mode failed"},
+							},
+						},
+					}
+					return clients
+				}(test.DefaultClients()),
+			),
+			wantErr: "switch to custom mode failed",
+		},
+		{
+			desc: "WaitOperation error",
+			ctx:  ctx,
+			m: testMigrator(
+				legacyNetwork,
+				func(clients *pkg.Clients) *pkg.Clients {
+					clients.Compute.(*test.FakeCompute).WaitOperationErr = errors.New("wait error")
+					return clients
+				}(test.DefaultClients()),
+			),
+			wantErr: "wait error",
+		},
+		{
+			desc:    "Context cancelled",
+			ctx:     cancelled,
+			m:       testMigrator(legacyNetwork, clients),
+			wantErr: "context error: context canceled",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.desc, func(t *testing.T) {
