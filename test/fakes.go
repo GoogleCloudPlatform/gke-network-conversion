@@ -78,27 +78,42 @@ func (f *FakeCompute) ListNetworks(ctx context.Context, project string) (network
 }
 
 type FakeContainer struct {
+	UpdateMasterResp *container.Operation
+	UpdateMasterErr  error
+
+	GetClusterResp *container.Cluster
+	GetClusterErr  error
+
 	ListClustersResp *container.ListClustersResponse
 	ListClustersErr  error
+
+	GetOperationResp *container.Operation
+	GetOperationErr  error
+
+	UpdateNodePoolResp *container.Operation
+	UpdateNodePoolErr  error
+
+	ListNodePoolsResp *container.ListNodePoolsResponse
+	ListNodePoolsErr  error
 }
 
 func (f *FakeContainer) UpdateMaster(ctx context.Context, req *container.UpdateMasterRequest, opts ...googleapi.CallOption) (*container.Operation, error) {
-	return nil, nil
+	return f.UpdateMasterResp, f.UpdateMasterErr
 }
 func (f *FakeContainer) GetCluster(ctx context.Context, name string, opts ...googleapi.CallOption) (*container.Cluster, error) {
-	return nil, nil
+	return f.GetClusterResp, f.GetClusterErr
 }
 func (f *FakeContainer) ListClusters(ctx context.Context, parent string, opts ...googleapi.CallOption) (*container.ListClustersResponse, error) {
 	return f.ListClustersResp, f.ListClustersErr
 }
 func (f *FakeContainer) GetOperation(ctx context.Context, name string, opts ...googleapi.CallOption) (*container.Operation, error) {
-	return nil, nil
+	return f.GetOperationResp, f.GetOperationErr
 }
 func (f *FakeContainer) UpdateNodePool(ctx context.Context, req *container.UpdateNodePoolRequest, opts ...googleapi.CallOption) (*container.Operation, error) {
-	return nil, nil
+	return f.UpdateNodePoolResp, f.UpdateNodePoolErr
 }
 func (f *FakeContainer) ListNodePools(ctx context.Context, name string, opts ...googleapi.CallOption) (*container.ListNodePoolsResponse, error) {
-	return nil, nil
+	return f.ListNodePoolsResp, f.ListNodePoolsErr
 }
 
 func DefaultFakeCompute() *FakeCompute {
@@ -135,10 +150,52 @@ func DefaultFakeContainer() *FakeContainer {
 	c.Subnetwork = "subnet"
 
 	return &FakeContainer{
+		UpdateMasterResp: &container.Operation{
+			Name:          UpdateMasterOperationName,
+			Location:      RegionA,
+			Status:        OperationDone,
+			StatusMessage: "",
+			SelfLink:      SelfLink(ContainerAPI, pkg.OperationsPath(ProjectName, RegionA, UpdateMasterOperationName)),
+		},
+		UpdateMasterErr: nil,
+
+		GetClusterResp: &c,
+		GetClusterErr:  nil,
+
 		ListClustersResp: &container.ListClustersResponse{
 			Clusters: []*container.Cluster{&PrePatchCluster},
 		},
 		ListClustersErr: nil,
+
+		GetOperationResp: &container.Operation{
+			Name:          GenericOperationName,
+			Location:      RegionA,
+			Status:        OperationDone,
+			StatusMessage: "",
+			SelfLink:      SelfLink(ContainerAPI, pkg.OperationsPath(ProjectName, RegionA, GenericOperationName)),
+		},
+		GetOperationErr: nil,
+
+		UpdateNodePoolResp: &container.Operation{
+			Name:          UpdateNodePoolOperationName,
+			Location:      RegionA,
+			Status:        OperationDone,
+			StatusMessage: "",
+			SelfLink:      SelfLink(ContainerAPI, pkg.OperationsPath(ProjectName, RegionA, UpdateNodePoolOperationName)),
+		},
+		UpdateNodePoolErr: nil,
+
+		ListNodePoolsResp: &container.ListNodePoolsResponse{
+			NodePools: []*container.NodePool{
+				{
+					Name: NodePoolName,
+					InstanceGroupUrls: []string{
+						InstanceGroupURL,
+					},
+				},
+			},
+		},
+		ListNodePoolsErr: nil,
 	}
 }
 

@@ -17,6 +17,7 @@ package clusters
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -42,6 +43,8 @@ func TestClusterMigrator_Migrate(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	clients := test.DefaultClients()
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
 	c := test.PrePatchCluster
 
 	cases := []struct {
@@ -55,7 +58,105 @@ func TestClusterMigrator_Migrate(t *testing.T) {
 			ctx:  ctx,
 			m:    testMigrator(&c, testOptions, clients),
 		},
-		// further tests incoming in another pull.
+		{
+			desc: "Subnet field already present",
+			ctx:  ctx,
+			m:    testMigrator(&container.Cluster{Subnetwork: "subnet"}, testOptions, clients),
+		},
+		{
+			desc: "UpdateMaster in progress",
+			ctx:  ctx,
+			m: testMigrator(
+				&c,
+				testOptions,
+				func(clients *pkg.Clients) *pkg.Clients {
+					clients.Container.(*test.FakeContainer).UpdateMasterErr = errors.New("operation projects/test-project/locations/region-a/operations/operation-update-master already in progress")
+					return clients
+				}(test.DefaultClients())),
+		},
+		{
+			desc: "UpdateMaster error",
+			ctx:  ctx,
+			m: testMigrator(
+				&c,
+				testOptions,
+				func(clients *pkg.Clients) *pkg.Clients {
+					clients.Container.(*test.FakeContainer).UpdateMasterErr = errors.New("unrecoverable error")
+					clients.Container.(*test.FakeContainer).GetOperationErr = errors.New("not found")
+					return clients
+				}(test.DefaultClients())),
+			wantErr: "error upgrading control plane for Cluster",
+		},
+		{
+			desc: "GetCluster error",
+			ctx:  ctx,
+			m: testMigrator(
+				&c,
+				testOptions,
+				func(clients *pkg.Clients) *pkg.Clients {
+					clients.Container.(*test.FakeContainer).GetClusterErr = errors.New("cannot get cluster")
+					return clients
+				}(test.DefaultClients())),
+			wantErr: "unable to confirm subnetwork value for cluster",
+		},
+		{
+			desc: "Patch not performed",
+			ctx:  ctx,
+			m: testMigrator(
+				&c,
+				testOptions,
+				func(clients *pkg.Clients) *pkg.Clients {
+					clients.Container.(*test.FakeContainer).GetClusterResp = &test.PrePatchCluster
+					return clients
+				}(test.DefaultClients())),
+			wantErr: "subnetwork field is empty for cluster",
+		},
+		{
+			desc: "ListNodePools error",
+			ctx:  ctx,
+			m: testMigrator(
+				&c,
+				testOptions,
+				func(clients *pkg.Clients) *pkg.Clients {
+					clients.Container.(*test.FakeContainer).ListNodePoolsErr = errors.New("cannot list nodePools")
+					return clients
+				}(test.DefaultClients())),
+			wantErr: "error retrieving NodePools",
+		},
+		{
+			desc: "Polling failure",
+			ctx:  ctx,
+			m: testMigrator(
+				&c,
+				testOptions,
+				func(clients *pkg.Clients) *pkg.Clients {
+					clients.Container.(*test.FakeContainer).GetOperationErr = errors.New("operation get failed")
+					return clients
+				}(test.DefaultClients())),
+			wantErr: "error retrieving Operation projects/test-project/locations/region-a/operations/operation-update-master: operation get failed",
+		},
+		{
+			desc: "Operation failure",
+			ctx:  ctx,
+			m: testMigrator(
+				&c,
+				testOptions,
+				func(clients *pkg.Clients) *pkg.Clients {
+					clients.Container.(*test.FakeContainer).GetOperationResp = &container.Operation{
+						Name:   "op",
+						Status: test.OperationDone,
+						Error:  &container.Status{Message: "operation failed"},
+					}
+					return clients
+				}(test.DefaultClients())),
+			wantErr: "error waiting on Operation projects/test-project/locations/region-a/operations/operation-update-master: operation failed",
+		},
+		{
+			desc:    "Context cancelled",
+			ctx:     cancelled,
+			m:       testMigrator(&c, testOptions, clients),
+			wantErr: "context error: context canceled",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.desc, func(t *testing.T) {

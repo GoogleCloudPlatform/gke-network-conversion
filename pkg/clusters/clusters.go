@@ -65,9 +65,82 @@ func New(
 
 // Migrate performs upgrade on the Cluster
 func (m *clusterMigrator) Migrate(ctx context.Context) error {
-	// implementation incoming in another pull.
+	if err := m.upgradeControlPlane(ctx); err != nil {
+		return err
+	}
+
+	return m.upgradeNodePools(ctx)
+}
+
+func (m *clusterMigrator) upgradeControlPlane(ctx context.Context) error {
+	if m.cluster.Subnetwork != "" {
+		log.Infof("Cluster %s does not require control plane upgrade.", m.ClusterPath())
+		return nil
+	}
+
+	version := m.opts.DesiredControlPlaneVersion
+	if m.opts.InPlaceUpgrade {
+		version = m.cluster.CurrentMasterVersion
+	}
+	req := &container.UpdateMasterRequest{
+		Name:          m.ClusterPath(),
+		MasterVersion: version,
+	}
+
+	log.Infof("Upgrading control plane for Cluster %q to version %q", req.Name, req.MasterVersion)
+
+	op, err := m.clients.Container.UpdateMaster(ctx, req)
+	if err != nil {
+		original := err
+		if op, err = m.clients.Container.GetOperation(ctx, operations.ObtainID(err)); err != nil {
+			return fmt.Errorf("error upgrading control plane for Cluster %s: %w", m.ClusterPath(), original)
+		}
+	}
+
+	path := pkg.PathRegex.FindString(op.SelfLink)
+	w := &ContainerOperation{
+		ProjectID: m.projectID,
+		Path:      path,
+		Client:    m.clients.Container,
+	}
+	if err := m.handler.Wait(ctx, w); err != nil {
+		return fmt.Errorf("error waiting on Operation %s: %w", path, err)
+	}
+
+	log.Infof("Upgraded control plane for Cluster %q to version %q", req.Name, req.MasterVersion)
+
+	resp, err := m.clients.Container.GetCluster(ctx, m.ClusterPath())
+	if err != nil {
+		return fmt.Errorf("unable to confirm subnetwork value for cluster %s: %w", m.ClusterPath(), err)
+	}
+	if resp.Subnetwork == "" {
+		return fmt.Errorf("subnetwork field is empty for cluster %s", m.ClusterPath())
+	}
 
 	return nil
+}
+
+// upgradeNodePools upgrades all Nodes for a clusters.
+// This is to ensure that the instance templates for the nodes
+func (m *clusterMigrator) upgradeNodePools(ctx context.Context) error {
+	resp, err := m.clients.Container.ListNodePools(ctx, m.ClusterPath())
+	if err != nil {
+		return fmt.Errorf("error retrieving NodePools for Cluster %s: %w", m.ClusterPath(), err)
+	}
+
+	npMigrators := make([]migrate.Migrator, len(resp.NodePools))
+	for i, np := range resp.NodePools {
+		npMigrators[i] = m.factory(np)
+	}
+
+	log.Infof("Initiate NodePool upgrades for Cluster %s", m.ClusterPath())
+	sem := make(chan struct{}, m.opts.ConcurrentNodePools)
+	return migrate.Run(ctx, sem, npMigrators...)
+}
+
+// ClusterPath formats identifying information about the cluster.
+func (m *clusterMigrator) ClusterPath() string {
+	return pkg.ClusterPath(m.projectID, m.cluster.Location, m.cluster.Name)
 }
 
 type ContainerOperation struct {

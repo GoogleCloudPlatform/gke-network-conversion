@@ -26,19 +26,18 @@ const (
 	UpdateNodePoolOperationName     = "operation-update-nodepool"
 	ClusterName                     = "cluster-c"
 	NodePoolName                    = "default-pool"
-	InstanceGroupURL                = "http://googleapis.com/projects/instanceGroups/default-pool-g"
 	InstanceGroupManagerName        = "default-pool-m"
 	InstanceTemplateName            = "default-pool-t"
 	SelectedNetwork                 = "network-0"
 	RegionA                         = "region-a"
 	ZoneA0                          = "region-a-0"
 	ZoneA1                          = "region-a-1"
-
-	ComputeAPI   = "https://compute.googleapis.com/compute/v1"
-	ContainerAPI = "https://container.googleapis.com/compute/v1"
+	ComputeAPI                      = "https://compute.googleapis.com/compute/v1"
+	ContainerAPI                    = "https://container.googleapis.com/compute/v1"
 )
 
 var (
+	InstanceGroupURL            = SelfLink(ComputeAPI, fmt.Sprintf("projects/%s/zones/%s/instanceGroups/%s", ProjectName, ZoneA0, "default-pool-g"))
 	InstanceGroupManagerZoneA0  = SelfLink(ComputeAPI, fmt.Sprintf("projects/%s/zones/%s/instanceGroupManagers/%s", ProjectName, ZoneA0, InstanceGroupManagerName))
 	InstanceGroupManagerZoneA1  = SelfLink(ComputeAPI, fmt.Sprintf("projects/%s/zones/%s/instanceGroupManagers/%s", ProjectName, ZoneA1, InstanceGroupManagerName))
 	InstanceGroupManagerRegionA = SelfLink(ComputeAPI, fmt.Sprintf("projects/%s/regions/%s/instanceGroupManagers/%s", ProjectName, RegionA, InstanceGroupManagerName))
