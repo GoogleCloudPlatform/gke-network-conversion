@@ -48,6 +48,12 @@ func (m *FakeMigrator) Migrate(ctx context.Context) error {
 }
 
 type FakeCompute struct {
+	GetInstanceGroupManagerResp *compute.InstanceGroupManager
+	GetInstanceGroupManagerErr  error
+
+	GetInstanceTemplateResp *compute.InstanceTemplate
+	GetInstanceTemplateErr  error
+
 	SwitchToCustomModeResp *compute.Operation
 	SwitchToCustomModeErr  error
 
@@ -56,13 +62,16 @@ type FakeCompute struct {
 
 	WaitOperationResp *compute.Operation
 	WaitOperationErr  error
+
+	ListNetworksResp []*compute.Network
+	ListNetworksErr  error
 }
 
 func (f *FakeCompute) GetInstanceGroupManager(ctx context.Context, project, zone, instanceGroupManager string, opts ...googleapi.CallOption) (*compute.InstanceGroupManager, error) {
-	return nil, nil
+	return f.GetInstanceGroupManagerResp, f.GetInstanceGroupManagerErr
 }
 func (f *FakeCompute) GetInstanceTemplate(ctx context.Context, project, instanceTemplate string, opts ...googleapi.CallOption) (*compute.InstanceTemplate, error) {
-	return nil, nil
+	return f.GetInstanceTemplateResp, f.GetInstanceTemplateErr
 }
 func (f *FakeCompute) SwitchToCustomMode(ctx context.Context, project, name string, opts ...googleapi.CallOption) (*compute.Operation, error) {
 	return f.SwitchToCustomModeResp, f.SwitchToCustomModeErr
@@ -74,7 +83,7 @@ func (f *FakeCompute) WaitOperation(ctx context.Context, project string, op *com
 	return f.WaitOperationResp, f.WaitOperationErr
 }
 func (f *FakeCompute) ListNetworks(ctx context.Context, project string) (networks []*compute.Network, err error) {
-	return nil, nil
+	return f.ListNetworksResp, f.ListNetworksErr
 }
 
 type FakeContainer struct {
@@ -119,6 +128,21 @@ func (f *FakeContainer) ListNodePools(ctx context.Context, name string, opts ...
 func DefaultFakeCompute() *FakeCompute {
 	switchToCustomModeOperationSelfLink := SelfLink(ContainerAPI, fmt.Sprintf("projects/%s/global/operations/%s", ProjectName, SwitchToCustomModeOperationName))
 	return &FakeCompute{
+		GetInstanceGroupManagerResp: &compute.InstanceGroupManager{
+			Name: InstanceGroupManagerName,
+		},
+		GetInstanceGroupManagerErr: nil,
+
+		GetInstanceTemplateResp: &compute.InstanceTemplate{
+			Name: InstanceTemplateName,
+			Properties: &compute.InstanceProperties{
+				NetworkInterfaces: []*compute.NetworkInterface{
+					{},
+				},
+			},
+		},
+		GetInstanceTemplateErr: nil,
+
 		SwitchToCustomModeResp: &compute.Operation{
 			Name:          SwitchToCustomModeOperationName,
 			Status:        OperationDone,
@@ -142,6 +166,13 @@ func DefaultFakeCompute() *FakeCompute {
 			SelfLink:      switchToCustomModeOperationSelfLink,
 		},
 		WaitOperationErr: nil,
+
+		ListNetworksResp: []*compute.Network{
+			{
+				Name: SelectedNetwork,
+			},
+		},
+		ListNetworksErr: nil,
 	}
 }
 
