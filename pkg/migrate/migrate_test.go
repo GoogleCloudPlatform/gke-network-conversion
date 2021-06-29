@@ -26,7 +26,40 @@ import (
 	"legacymigration/test"
 )
 
-func TestMigrate(t *testing.T) {
+type FakeMigrator struct {
+	CompleteError error
+	ValidateError error
+	MigrateError  error
+}
+
+func (m *FakeMigrator) Complete(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return errors.New("context done")
+	default:
+		return m.CompleteError
+	}
+}
+
+func (m *FakeMigrator) Validate(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return errors.New("context done")
+	default:
+		return m.ValidateError
+	}
+}
+
+func (m *FakeMigrator) Migrate(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return errors.New("context done")
+	default:
+		return m.MigrateError
+	}
+}
+
+func TestMigrate_Run(t *testing.T) {
 	cancelled, cancel := context.WithCancel(context.Background())
 	cancel()
 
@@ -37,6 +70,7 @@ func TestMigrate(t *testing.T) {
 	cases := []struct {
 		desc      string
 		migrators []Migrator
+		method    MethodType
 		ctx       context.Context
 		wantErr   string
 		wantLog   string
@@ -44,37 +78,121 @@ func TestMigrate(t *testing.T) {
 		{
 			desc: "Empty migrators",
 			migrators: []Migrator{
-				&test.FakeMigrator{},
+				&FakeMigrator{},
 			},
-			ctx:     context.Background(),
-			wantErr: "",
+			method: MigrateMethod,
+			ctx:    context.Background(),
 		},
 		{
 			desc: "Successful run",
 			migrators: []Migrator{
-				&test.FakeMigrator{},
+				&FakeMigrator{},
 			},
-			ctx:     context.Background(),
-			wantErr: "",
+			method: MigrateMethod,
+			ctx:    context.Background(),
 		},
 		{
 			desc: "Errored migrator",
 			migrators: []Migrator{
-				&test.FakeMigrator{
-					Error: errors.New("expected error"),
+				&FakeMigrator{
+					MigrateError: errors.New("expected error"),
 				},
 			},
+			method:  MigrateMethod,
 			ctx:     context.Background(),
-			wantLog: "expected error",
+			wantErr: "expected error",
 		},
 		{
-			desc: "Closed context",
+			desc: "Multiple errored migrators",
 			migrators: []Migrator{
-				&test.FakeMigrator{},
-				&test.FakeMigrator{},
+				&FakeMigrator{
+					MigrateError: errors.New("expected error"),
+				},
+				&FakeMigrator{
+					MigrateError: errors.New("expected another error"),
+				},
 			},
+			method:  MigrateMethod,
+			ctx:     context.Background(),
+			wantErr: "expected another error",
+		},
+		{
+			desc: "Single errored migrators",
+			migrators: []Migrator{
+				&FakeMigrator{},
+				&FakeMigrator{
+					MigrateError: errors.New("expected error"),
+				},
+			},
+			method:  MigrateMethod,
+			ctx:     context.Background(),
+			wantErr: "expected error",
+		},
+		{
+			desc: "Migrate, Closed context",
+			migrators: []Migrator{
+				&FakeMigrator{},
+				&FakeMigrator{},
+			},
+			method:  MigrateMethod,
 			ctx:     cancelled,
-			wantErr: "context error: context canceled",
+			wantErr: "Migrate: context canceled",
+		},
+		{
+			desc: "Validate, Closed context",
+			migrators: []Migrator{
+				&FakeMigrator{},
+				&FakeMigrator{},
+			},
+			method:  ValidateMethod,
+			ctx:     cancelled,
+			wantErr: "Validate: context canceled",
+		},
+		{
+			desc: "Complete, Closed context",
+			migrators: []Migrator{
+				&FakeMigrator{},
+				&FakeMigrator{},
+			},
+			method:  CompleteMethod,
+			ctx:     cancelled,
+			wantErr: "Complete: context canceled",
+		},
+		{
+			desc: "Validate",
+			migrators: []Migrator{
+				&FakeMigrator{},
+				&FakeMigrator{},
+			},
+			method: ValidateMethod,
+			ctx:    context.Background(),
+		},
+		{
+			desc: "Migrate",
+			migrators: []Migrator{
+				&FakeMigrator{},
+				&FakeMigrator{},
+			},
+			method: MigrateMethod,
+			ctx:    context.Background(),
+		},
+		{
+			desc: "Complete",
+			migrators: []Migrator{
+				&FakeMigrator{},
+				&FakeMigrator{},
+			},
+			method: CompleteMethod,
+			ctx:    context.Background(),
+		},
+		{
+			desc: "Invalid method",
+			migrators: []Migrator{
+				&FakeMigrator{},
+				&FakeMigrator{},
+			},
+			method: MethodType(3),
+			ctx:    context.Background(),
 		},
 	}
 	for _, tc := range cases {
@@ -83,14 +201,14 @@ func TestMigrate(t *testing.T) {
 			log.StandardLogger().SetOutput(buf)
 			sem := make(chan struct{}, 1)
 
-			got := Run(tc.ctx, sem, tc.migrators...)
+			got := run(tc.ctx, sem, tc.method, tc.migrators...)
 
 			if diff := test.ErrorDiff(tc.wantErr, got); diff != "" {
-				t.Fatalf("migrate.Run diff (-want +got):\n%s", diff)
+				t.Fatalf("migrate.run diff (-want +got):\n%s", diff)
 			}
 
 			if diff := !strings.Contains(buf.String(), tc.wantLog); tc.wantLog != "" && diff {
-				t.Errorf("migrate.Run missing log output:\n\twanted entry: %s\n\tgot entries: %s", tc.wantLog, buf.String())
+				t.Errorf("migrate.run missing log output:\n\twanted entry: %s\n\tgot entries: %s", tc.wantLog, buf.String())
 			}
 		})
 	}

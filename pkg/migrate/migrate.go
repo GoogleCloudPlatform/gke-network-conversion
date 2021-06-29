@@ -21,39 +21,99 @@ import (
 	"sync"
 
 	log "github.com/sirupsen/logrus"
+	"go.uber.org/multierr"
 )
 
 type Migrator interface {
+	Complete(ctx context.Context) error
+	Validate(ctx context.Context) error
 	Migrate(ctx context.Context) error
 }
 
-// Run rate-limits the execution of Migrators based on the incoming semaphore.
-// An error which occurs during the Migrator.Migrate call will cease progressing
-// on that branch of the execution tree.
-func Run(ctx context.Context, sem chan struct{}, migrators ...Migrator) error {
+type MethodType int
+
+const (
+	CompleteMethod MethodType = iota
+	ValidateMethod
+	MigrateMethod
+)
+
+func (e MethodType) String() string {
+	switch e {
+	case CompleteMethod:
+		return "Complete"
+	case ValidateMethod:
+		return "Validate"
+	case MigrateMethod:
+		return "Migrate"
+	default:
+		return fmt.Sprintf("%d", int(e))
+	}
+}
+
+// Complete runs Migrator.Complete on all migrators.
+func Complete(ctx context.Context, sem chan struct{}, migrators ...Migrator) error {
+	return run(ctx, sem, CompleteMethod, migrators...)
+}
+
+// Validate runs Migrator.Validate on all migrators.
+func Validate(ctx context.Context, sem chan struct{}, migrators ...Migrator) error {
+	return run(ctx, sem, ValidateMethod, migrators...)
+}
+
+// Migrate runs Migrator.Migrate on all migrators.
+func Migrate(ctx context.Context, sem chan struct{}, migrators ...Migrator) error {
+	return run(ctx, sem, MigrateMethod, migrators...)
+}
+
+// run rate-limits the execution of a specified Migrator method based on the incoming semaphore.
+// Accumulates any errors into a single error.
+func run(ctx context.Context, sem chan struct{}, t MethodType, migrators ...Migrator) error {
 	var (
-		err error
-		wg  = sync.WaitGroup{}
+		errors  error
+		wg      = sync.WaitGroup{}
+		results = make(chan error, len(migrators))
 	)
 
 Loop:
 	for _, m := range migrators {
 		select {
 		case <-ctx.Done():
-			log.Errorf("Context closed. Waiting for pending migrators to finish.")
-			err = fmt.Errorf("context error: %w", ctx.Err())
+			errors = multierr.Append(errors, fmt.Errorf("context closed during %T.%v: %w", m, t, ctx.Err()))
 			break Loop
 		case sem <- struct{}{}:
 		}
 		wg.Add(1)
 		go func(m Migrator) {
-			if err := m.Migrate(ctx); err != nil {
-				log.Errorf("Error during migration for %T: %v", m, err)
+			defer func() { <-sem }()
+			defer wg.Done()
+			var method func(ctx context.Context) error
+			switch t {
+			case CompleteMethod:
+				method = m.Complete
+			case ValidateMethod:
+				method = m.Validate
+			case MigrateMethod:
+				method = m.Migrate
+			default:
+				log.Errorf("Invalid method %v", t)
+				return
 			}
-			<-sem
-			wg.Done()
+			results <- method(ctx)
 		}(m)
 	}
 	wg.Wait()
-	return err
+	close(results)
+
+	if errors != nil {
+		return errors
+	}
+
+	for err := range results {
+		if err != nil {
+			errors = multierr.Append(errors, err)
+		}
+	}
+
+	return errors
 }
