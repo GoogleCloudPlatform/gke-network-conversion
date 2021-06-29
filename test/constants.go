@@ -34,6 +34,12 @@ const (
 	ZoneA1                          = "region-a-1"
 	ComputeAPI                      = "https://compute.googleapis.com/compute/v1"
 	ContainerAPI                    = "https://container.googleapis.com/compute/v1"
+
+	// Version constants
+	NoChannel = ""
+	Rapid     = "Rapid"
+	Regular   = "Regular"
+	Stable    = "Stable"
 )
 
 var (

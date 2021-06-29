@@ -88,11 +88,10 @@ type ContainerService interface {
 	UpdateMaster(ctx context.Context, req *container.UpdateMasterRequest, opts ...googleapi.CallOption) (*container.Operation, error)
 	GetCluster(ctx context.Context, name string, opts ...googleapi.CallOption) (*container.Cluster, error)
 	ListClusters(ctx context.Context, parent string, opts ...googleapi.CallOption) (*container.ListClustersResponse, error)
-
 	GetOperation(ctx context.Context, name string, opts ...googleapi.CallOption) (*container.Operation, error)
-
 	UpdateNodePool(ctx context.Context, req *container.UpdateNodePoolRequest, opts ...googleapi.CallOption) (*container.Operation, error)
 	ListNodePools(ctx context.Context, name string, opts ...googleapi.CallOption) (*container.ListNodePoolsResponse, error)
+	GetServerConfig(ctx context.Context, name string, opts ...googleapi.CallOption) (*container.ServerConfig, error)
 }
 
 type Compute struct {
@@ -168,6 +167,10 @@ func (c *Container) UpdateNodePool(ctx context.Context, req *container.UpdateNod
 }
 func (c *Container) ListNodePools(ctx context.Context, name string, opts ...googleapi.CallOption) (*container.ListNodePoolsResponse, error) {
 	return c.V1.Projects.Locations.Clusters.NodePools.List(name).Context(ctx).Do(opts...)
+}
+
+func (c *Container) GetServerConfig(ctx context.Context, name string, opts ...googleapi.CallOption) (*container.ServerConfig, error) {
+	return c.V1.Projects.Locations.GetServerConfig(name).Context(ctx).Do(opts...)
 }
 
 type Clients struct {

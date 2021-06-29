@@ -17,7 +17,6 @@ package test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"google.golang.org/api/compute/v1"
@@ -33,19 +32,6 @@ var (
 		Network:  SelectedNetwork,
 	}
 )
-
-type FakeMigrator struct {
-	Error error
-}
-
-func (m *FakeMigrator) Migrate(ctx context.Context) error {
-	select {
-	case <-ctx.Done():
-		return errors.New("context done")
-	default:
-		return m.Error
-	}
-}
 
 type FakeCompute struct {
 	GetInstanceGroupManagerResp *compute.InstanceGroupManager
@@ -104,6 +90,9 @@ type FakeContainer struct {
 
 	ListNodePoolsResp *container.ListNodePoolsResponse
 	ListNodePoolsErr  error
+
+	GetServerConfigResp *container.ServerConfig
+	GetServerConfigErr  error
 }
 
 func (f *FakeContainer) UpdateMaster(ctx context.Context, req *container.UpdateMasterRequest, opts ...googleapi.CallOption) (*container.Operation, error) {
@@ -123,6 +112,9 @@ func (f *FakeContainer) UpdateNodePool(ctx context.Context, req *container.Updat
 }
 func (f *FakeContainer) ListNodePools(ctx context.Context, name string, opts ...googleapi.CallOption) (*container.ListNodePoolsResponse, error) {
 	return f.ListNodePoolsResp, f.ListNodePoolsErr
+}
+func (f *FakeContainer) GetServerConfig(ctx context.Context, name string, opts ...googleapi.CallOption) (*container.ServerConfig, error) {
+	return f.GetServerConfigResp, f.GetServerConfigErr
 }
 
 func DefaultFakeCompute() *FakeCompute {
@@ -227,6 +219,50 @@ func DefaultFakeContainer() *FakeContainer {
 			},
 		},
 		ListNodePoolsErr: nil,
+
+		GetServerConfigResp: &container.ServerConfig{
+			Channels: []*container.ReleaseChannelConfig{
+				{
+					Channel:        Rapid,
+					DefaultVersion: "1.20.6-gke.1400",
+					ValidVersions: []string{
+						"1.21.1-gke.1800",
+						"1.20.7-gke.1800",
+						"1.20.6-gke.1400",
+					},
+				}, {
+					Channel:        Regular,
+					DefaultVersion: "1.19.10-gke.1600",
+					ValidVersions: []string{
+						"1.20.6-gke.1000",
+						"1.19.10-gke.1700",
+						"1.19.10-gke.1600",
+					},
+				}, {
+					Channel:        Stable,
+					DefaultVersion: "1.18.17-gke.1901",
+					ValidVersions: []string{
+						"1.19.10-gke.1000",
+						"1.18.18-gke.1100",
+						"1.18.17-gke.1901",
+					},
+				},
+			},
+			DefaultClusterVersion: "1.19.10-gke.1600",
+			ValidMasterVersions: []string{
+				"1.20.7-gke.1800",
+				"1.20.6-gke.1000",
+				"1.19.11-gke.1700",
+				"1.19.10-gke.1700",
+			},
+			ValidNodeVersions: []string{
+				"1.20.7-gke.1800",
+				"1.20.6-gke.1000",
+				"1.19.11-gke.1700",
+				"1.19.10-gke.1700",
+			},
+		},
+		GetServerConfigErr: nil,
 	}
 }
 
