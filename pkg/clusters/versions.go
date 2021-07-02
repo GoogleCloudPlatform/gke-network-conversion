@@ -28,6 +28,13 @@ type Resource int
 const (
 	Node Resource = iota
 	ControlPlane
+
+	// This is the maximum version skew allowed for auto-upgrade clusters.
+	// This is used rather than the Kubernetes version skew
+	MaxVersionSkew = 1
+
+	DefaultVersion = "-"
+	LatestVersion  = "latest"
 )
 
 // getVersions retrieves the default and valid versions based on the release channel.
@@ -71,9 +78,12 @@ func IsFormatValid(s string) error {
 	if len(ksplit) < 2 || len(ksplit) > 3 {
 		return fmt.Errorf("malformed version: %s", s)
 	}
-	_, err := strconv.Atoi(ksplit[0])
+	major, err := strconv.Atoi(ksplit[0])
 	if err != nil {
 		return fmt.Errorf("malformed major version %s: %w", s, err)
+	}
+	if major != 1 {
+		return fmt.Errorf("not compatible with major versions other than 1: version %s", s)
 	}
 	_, err = strconv.Atoi(ksplit[1])
 	if err != nil {
@@ -105,44 +115,112 @@ func IsFormatValid(s string) error {
 	return nil
 }
 
-// isVersionValid ensures that the desired version is not a downgrade and is in the list of valid versions.
-// Note: version aliases are selected using a string prefix, and therefore the major/minor/patch/gke
-// versions are not evaluated as integers.
-//
-// e.g. alias 1.20.1 will match 1.20.111-gke.1 before 1.20.11-gke.1 or 1.20.1-gke.1
-func isVersionValid(desired, current, def string, valid []string) error {
-
-	if desired == "-" && current == def {
-		return fmt.Errorf("desired version %s (%s), current version: %s; cannot upgrade in-place", desired, def, current)
+// isUpgrade ensures that the desired version is not a downgrade and is in the list of valid versions.
+func isUpgrade(desired, current string, valid []string, allowInPlace bool) error {
+	if len(valid) == 0 {
+		// Should not happen, but protects from out-of-bounds error.
+		return fmt.Errorf("list of valid versions is empty: %v", valid)
 	}
 
-	// Versions are in descending order, so select the first match and track the indexes.
 	var (
-		selectedVersion string
-		selectedIndex   int
-		currentIndex    int
+		desiredIndex = -1
+		currentIndex = -1
 	)
 	for i, v := range valid {
-		if strings.HasPrefix(v, desired) {
-			selectedVersion = v
-			selectedIndex = i
-			break
+		if v == desired {
+			desiredIndex = i
 		}
-	}
-	if selectedVersion == "" {
-		return fmt.Errorf("desired version %s was not found; valid versions: %v", desired, valid)
-	}
-
-	for i, v := range valid {
 		if v == current {
 			currentIndex = i
-			break
 		}
 	}
-
-	if currentIndex <= selectedIndex {
+	if desiredIndex == -1 {
+		return fmt.Errorf("desired version %s was not found; valid versions: %v", desired, valid)
+	}
+	if currentIndex == -1 {
+		// The defalt version is no longer a valid version.
+		// This can happen to node pools with auto-upgrade disabled.
+		return nil
+	}
+	if allowInPlace && currentIndex == desiredIndex {
+		return nil
+	}
+	if currentIndex <= desiredIndex {
 		return fmt.Errorf("desired version %s must be newer than current version %s; valid versions: %v", desired, current, valid)
 	}
 
 	return nil
+}
+
+// IsWithinVersionSkew ensures that the node and control plane versions are within version skew.
+// This helps avoid version skew API errors, e.g.:
+//  `node version "x" must be within one minor version of master version "y"`
+//
+// Versions must be in the form "1\.x.*".
+//
+// Note: allowed GKE version skew depends on whether the cluster is using a release channel.
+//  This method uses the release channel version skew value (1 minor version).
+func IsWithinVersionSkew(npVersion, cpVersion string, allowedSkew int) error {
+	npMinor, err := GetMinorVersion(npVersion)
+	if err != nil {
+		return err
+	}
+	cpMinor, err := GetMinorVersion(cpVersion)
+	if err != nil {
+		return err
+	}
+
+	if abs(npMinor-cpMinor) > allowedSkew {
+		return fmt.Errorf("desired node version %s must be within %d minor versions of desired control plane version %s",
+			npVersion, allowedSkew, cpVersion)
+	}
+
+	return nil
+}
+
+// resolveVersion converts the desired version (alias) to a specific GKE version.
+//
+// Example(s):
+//  1.21 -> 1.21.x-gke.y
+//  "-"  -> 1.x.y-gke.z
+func resolveVersion(desired, def string, valid []string) (string, error) {
+	if len(valid) == 0 {
+		// Should not happen, but protects from out-of-bounds error.
+		return "", fmt.Errorf("list of valid versions is empty: %v", valid)
+	}
+	if def == "" {
+		// Should not happen, but protects from unforeseen input return values.
+		return "", fmt.Errorf("default version is missing: desired version %s", desired)
+	}
+
+	if desired == DefaultVersion {
+		return def, nil
+	}
+	if desired == LatestVersion {
+		return valid[0], nil
+	}
+
+	// Versions are in descending order, so select the first match.
+	for _, v := range valid {
+		if strings.HasPrefix(v, desired) {
+			return v, nil
+		}
+	}
+
+	return "", fmt.Errorf("desired version %q could not be resolved; valid versions: %v", desired, valid)
+}
+
+// getMajorMinorVersion gets the k8s minor version as an int.
+// getMajorMinorVersion assumes validation has already been performed on the input.
+func GetMinorVersion(v string) (int, error) {
+	split := strings.Split(v, ".")
+	return strconv.Atoi(split[1])
+}
+
+// abs returns the absolute value of x.
+func abs(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
 }
