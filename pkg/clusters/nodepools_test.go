@@ -30,131 +30,180 @@ import (
 	"legacymigration/test"
 )
 
-func TestNodePoolMigrator_Migrate(t *testing.T) {
-	ctx := context.Background()
-	clients := test.DefaultClients()
-	cm := testMigrator(&test.PrePatchCluster, testOptions, clients)
+func TestNodePoolMigrator_Complete(t *testing.T) {
+	cases := []struct {
+		desc      string
+		ctx       context.Context
+		npDesired string
+		cpVersion string
+		want      string
+		wantErr   string
+	}{
+		{
+			desc:      "Success - resolve literal version",
+			ctx:       context.Background(),
+			npDesired: "1.19.10-gke.1700",
+			want:      "1.19.10-gke.1700",
+		},
+		{
+			desc:      "Success - resolve default alias",
+			ctx:       context.Background(),
+			npDesired: "-",
+			cpVersion: "1.19.10-gke.1600",
+			want:      "1.19.10-gke.1600",
+		},
+		{
+			desc:      "Success - resolve minor version alias",
+			ctx:       context.Background(),
+			npDesired: "1.19",
+			want:      "1.19.11-gke.1700",
+		},
+		{
+			desc:      "Fail - cannot resolve",
+			ctx:       context.Background(),
+			npDesired: "1.22",
+			wantErr:   "could not be resolved",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			m := testNodePoolMigrator()
+			m.opts.DesiredNodeVersion = tc.npDesired
+			m.resolvedDesiredControlPlaneVersion = tc.cpVersion
 
+			err := m.Complete(tc.ctx)
+			if diff := test.ErrorDiff(tc.wantErr, err); diff != "" {
+				t.Errorf("nodePoolMigrator.Complete diff (-want +got):\n%s", diff)
+			}
+
+			got := m.resolvedDesiredNodeVersion
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("resolvedDesiredNodeVersion diff (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestNodePoolMigrator_Validate(t *testing.T) {
+	cases := []struct {
+		desc       string
+		ctx        context.Context
+		npDesired  string
+		npResolved string
+		npCurrent  string
+		cpVersion  string
+		want       string
+		wantErr    string
+	}{
+		{
+			desc:       "Success - minor version upgrade",
+			ctx:        context.Background(),
+			npDesired:  "1.19.11-gke.1700",
+			npResolved: "1.19.11-gke.1700",
+			npCurrent:  "1.19.10-gke.1700",
+			cpVersion:  "1.19.10-gke.1700",
+		},
+		{
+			desc:       "Fail - in-place node upgrade",
+			ctx:        context.Background(),
+			npDesired:  "1.19.10-gke.1700",
+			npResolved: "1.19.10-gke.1700",
+			npCurrent:  "1.19.10-gke.1700",
+			wantErr:    "must be newer than current version",
+		},
+		{
+			desc:       "Fail - outside version skew",
+			ctx:        context.Background(),
+			npDesired:  "1.19.10-gke.1700",
+			npResolved: "1.19.10-gke.1700",
+			npCurrent:  "1.17.17-gke.9100",
+			cpVersion:  "1.17.17-gke.9100",
+			wantErr:    "must be within 1 minor versions of desired control plane version",
+		},
+	}
+	for _, tc := range cases {
+		m := testNodePoolMigrator()
+		m.opts.DesiredNodeVersion = tc.npDesired
+		m.nodePool.Version = tc.npCurrent
+		m.resolvedDesiredControlPlaneVersion = tc.cpVersion
+		m.resolvedDesiredNodeVersion = tc.npResolved
+
+		t.Run(tc.desc, func(t *testing.T) {
+			err := m.Validate(tc.ctx)
+			if diff := test.ErrorDiff(tc.wantErr, err); diff != "" {
+				t.Errorf("nodePoolMigrator.Validate diff (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestNodePoolMigrator_Migrate(t *testing.T) {
 	cases := []struct {
 		desc    string
-		ctx     context.Context
-		m       *nodePoolMigrator
+		URLs    []string
 		wantErr string
 		wantLog string
 	}{
 		{
 			desc: "Single InstanceGroupManager",
-			ctx:  ctx,
-			m: &nodePoolMigrator{
-				clusterMigrator: cm,
-				nodePool: &container.NodePool{
-					Name:      "np",
-					Locations: []string{test.ZoneA0},
-					InstanceGroupUrls: []string{
-						test.InstanceGroupManagerZoneA0,
-					},
-				},
+			URLs: []string{
+				test.InstanceGroupManagerZoneA0,
 			},
 			wantLog: "Upgrading NodePool",
 		},
 		{
 			desc: "Multiple InstanceGroupManagers",
-			ctx:  ctx,
-			m: &nodePoolMigrator{
-				clusterMigrator: cm,
-				nodePool: &container.NodePool{
-					Name:      "np",
-					Locations: []string{test.ZoneA0},
-					InstanceGroupUrls: []string{
-						test.InstanceGroupManagerZoneA0,
-						test.InstanceGroupManagerZoneA1,
-					},
-				},
+			URLs: []string{
+				test.InstanceGroupManagerZoneA0,
+				test.InstanceGroupManagerZoneA1,
 			},
 			wantLog: "Upgrading NodePool",
 		},
 		{
 			desc: "Regional InstanceGroupManager",
-			ctx:  ctx,
-			m: &nodePoolMigrator{
-				clusterMigrator: cm,
-				nodePool: &container.NodePool{
-					Name:      "np",
-					Locations: []string{test.ZoneA0},
-					InstanceGroupUrls: []string{
-						test.InstanceGroupManagerRegionA,
-					},
-				},
+			URLs: []string{
+				test.InstanceGroupManagerRegionA,
 			},
 			wantLog: "Upgrading NodePool",
 		},
 		{
 			// No underlying template to update via an upgrade.
-			desc: "No InstanceGroupManagers",
-			ctx:  ctx,
-			m: &nodePoolMigrator{
-				clusterMigrator: cm,
-				nodePool: &container.NodePool{
-					Name:      "np",
-					Locations: []string{test.ZoneA0},
-				},
-			},
+			desc:    "No InstanceGroupManagers",
 			wantLog: "Upgrade not required for NodePool",
 		},
 		{
 			// InstanceGroups do not have a NodeTemplate and should not appear in a InstanceGroup NodePool's list of URLs.
 			desc: "Unhandled InstanceGroups",
-			ctx:  ctx,
-			m: &nodePoolMigrator{
-				clusterMigrator: cm,
-				nodePool: &container.NodePool{
-					Name:      "np",
-					Locations: []string{test.ZoneA0},
-					InstanceGroupUrls: []string{
-						fmt.Sprintf("%s/projects/%s/zones/%s/instanceGroups/%s", test.ComputeAPI, test.ProjectName, test.ZoneA0, "instanceGroup0"),
-					},
-				},
+			URLs: []string{
+				fmt.Sprintf("%s/projects/%s/zones/%s/instanceGroups/%s", test.ComputeAPI, test.ProjectName, test.ZoneA0, "instanceGroup0"),
 			},
 			wantErr: "error(s) encountered obtaining an InstanceTemplate for NodePool",
 		},
 		{
 			desc: "matching InstanceGroup",
-			ctx:  ctx,
-			m: &nodePoolMigrator{
-				clusterMigrator: cm,
-				nodePool: &container.NodePool{
-					Name:      "np",
-					Locations: []string{test.ZoneA0},
-					InstanceGroupUrls: []string{
-						test.InstanceGroupManagerZoneA1,
-					},
-				},
+			URLs: []string{
+				test.InstanceGroupManagerZoneA1,
 			},
 			wantLog: "Upgrading NodePool",
 		},
 		{
 			desc: "One matching InstanceGroup",
-			ctx:  ctx,
-			m: &nodePoolMigrator{
-				clusterMigrator: cm,
-				nodePool: &container.NodePool{
-					Name:      "np",
-					Locations: []string{test.ZoneA0},
-					InstanceGroupUrls: []string{
-						fmt.Sprintf("%s/projects/%s/zones/%s/instanceGroups/%s", test.ComputeAPI, test.ProjectName, test.ZoneA0, "instanceGroup0"),
-						test.InstanceGroupManagerZoneA1,
-					},
-				},
+			URLs: []string{
+				fmt.Sprintf("%s/projects/%s/zones/%s/instanceGroups/%s", test.ComputeAPI, test.ProjectName, test.ZoneA0, "instanceGroup0"),
+				test.InstanceGroupManagerZoneA1,
 			},
 			wantLog: "Upgrading NodePool",
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.desc, func(t *testing.T) {
+			m := testNodePoolMigrator()
+			m.resolvedDesiredNodeVersion = "1.19.11-gke.1700"
+			m.nodePool.InstanceGroupUrls = tc.URLs
 			buf := &bytes.Buffer{}
 			log.StandardLogger().SetOutput(buf)
 
-			err := tc.m.Migrate(tc.ctx)
+			err := m.Migrate(context.Background())
 			if diff := test.ErrorDiff(tc.wantErr, err); diff != "" {
 				t.Errorf("nodePoolMigrator.Migrate diff (-want +got):\n%s", diff)
 			}
@@ -167,164 +216,80 @@ func TestNodePoolMigrator_Migrate(t *testing.T) {
 }
 
 func TestNodePoolMigrator_migrate(t *testing.T) {
-	ctx := context.Background()
-	clients := test.DefaultClients()
-
 	cases := []struct {
 		desc    string
-		ctx     context.Context
-		m       *nodePoolMigrator
+		clients *pkg.Clients
+		wait    bool
 		wantErr string
 		wantLog string
 	}{
 		{
-			desc: "Do not wait for upgrade",
-			ctx:  ctx,
-			m: &nodePoolMigrator{
-				clusterMigrator: testMigrator(
-					&test.PrePatchCluster,
-					&Options{
-						ConcurrentNodePools:        1,
-						WaitForNodeUpgrade:         false,
-						DesiredControlPlaneVersion: pkg.DefaultVersion,
-						DesiredNodeVersion:         pkg.DefaultVersion,
-						InPlaceUpgrade:             false,
-					},
-					clients),
-				nodePool: &container.NodePool{
-					Name: "np",
-				},
-			},
+			desc:    "Do not wait for upgrade",
+			clients: test.DefaultClients(),
 			wantLog: "Not waiting on upgrade for NodePool",
 		},
 		{
 			desc: "UpdateNodePool error",
-			ctx:  ctx,
-			m: &nodePoolMigrator{
-				clusterMigrator: testMigrator(
-					&test.PrePatchCluster,
-					testOptions,
-					func(clients *pkg.Clients) *pkg.Clients {
-						clients.Container.(*test.FakeContainer).UpdateNodePoolErr = errors.New("unrecoverable error")
-						clients.Container.(*test.FakeContainer).GetOperationErr = errors.New("not found")
-						return clients
-					}(test.DefaultClients())),
-				nodePool: &container.NodePool{
-					Name: "np",
-				},
-			},
+			clients: func(clients *pkg.Clients) *pkg.Clients {
+				clients.Container.(*test.FakeContainer).UpdateNodePoolErr = errors.New("unrecoverable error")
+				clients.Container.(*test.FakeContainer).GetOperationErr = errors.New("not found")
+				return clients
+			}(test.DefaultClients()),
+			wait:    true,
 			wantErr: "error upgrading NodePool",
 		},
 		{
 			desc: "NodePool upgrade in progress",
-			ctx:  ctx,
-			m: &nodePoolMigrator{
-				clusterMigrator: testMigrator(
-					&test.PrePatchCluster,
-					testOptions,
-					func(clients *pkg.Clients) *pkg.Clients {
-						clients.Container.(*test.FakeContainer).UpdateNodePoolErr = errors.New("operation: operation-abc-123 already in progress")
-						return clients
-					}(test.DefaultClients())),
-				nodePool: &container.NodePool{
-					Name: "np",
-				},
-			},
+			clients: func(clients *pkg.Clients) *pkg.Clients {
+				clients.Container.(*test.FakeContainer).UpdateNodePoolErr = errors.New("operation: operation-abc-123 already in progress")
+				return clients
+			}(test.DefaultClients()),
+			wait:    true,
 			wantLog: "upgraded",
 		},
 		{
 			desc: "Not waiting on NodePool upgrade in progress",
-			ctx:  ctx,
-			m: &nodePoolMigrator{
-				clusterMigrator: testMigrator(
-					&test.PrePatchCluster,
-					&Options{
-						ConcurrentNodePools:        1,
-						WaitForNodeUpgrade:         false,
-						DesiredControlPlaneVersion: pkg.DefaultVersion,
-						DesiredNodeVersion:         pkg.DefaultVersion,
-						InPlaceUpgrade:             false,
-					},
-					func(clients *pkg.Clients) *pkg.Clients {
-						clients.Container.(*test.FakeContainer).UpdateNodePoolErr = errors.New("operation: operation-abc-123 already in progress")
-						return clients
-					}(test.DefaultClients())),
-				nodePool: &container.NodePool{
-					Name: "np",
-				},
-			},
+			clients: func(clients *pkg.Clients) *pkg.Clients {
+				clients.Container.(*test.FakeContainer).UpdateNodePoolErr = errors.New("operation: operation-abc-123 already in progress")
+				return clients
+			}(test.DefaultClients()),
 			wantLog: "Not waiting on upgrade for NodePool",
 		},
 		{
-			desc: "In-place upgrade",
-			ctx:  ctx,
-			m: &nodePoolMigrator{
-				clusterMigrator: testMigrator(
-					&test.PrePatchCluster,
-					&Options{
-						ConcurrentNodePools:        1,
-						WaitForNodeUpgrade:         true,
-						DesiredControlPlaneVersion: pkg.DefaultVersion,
-						DesiredNodeVersion:         pkg.DefaultVersion,
-						InPlaceUpgrade:             true,
-					},
-					clients),
-				nodePool: &container.NodePool{
-					Name:    "np",
-					Version: "1.20.1",
-				},
-			},
-			wantLog: "to version \\\"1.20.1\\\"",
-		},
-		{
 			desc: "Polling failure during UpdateNodePool operation",
-			ctx:  ctx,
-			m: &nodePoolMigrator{
-				clusterMigrator: testMigrator(
-					&test.PrePatchCluster,
-					testOptions,
-					func(clients *pkg.Clients) *pkg.Clients {
-						clients.Container.(*test.FakeContainer).GetOperationErr = errors.New("operation get failed")
-						return clients
-					}(test.DefaultClients())),
-				nodePool: &container.NodePool{
-					Name: "np",
-				},
-			},
+			clients: func(clients *pkg.Clients) *pkg.Clients {
+				clients.Container.(*test.FakeContainer).GetOperationErr = errors.New("operation get failed")
+				return clients
+			}(test.DefaultClients()),
+			wait:    true,
 			wantErr: "error retrieving Operation projects/test-project/locations/region-a/operations/operation-update-nodepool: operation get failed",
 		},
 		{
 			desc: "UpdateNodePool operation failure",
-			ctx:  ctx,
-			m: &nodePoolMigrator{
-				clusterMigrator: testMigrator(
-					&test.PrePatchCluster,
-					testOptions,
-					func(clients *pkg.Clients) *pkg.Clients {
-						clients.Container.(*test.FakeContainer).GetOperationResp = &container.Operation{
-							Name:   "op",
-							Status: test.OperationDone,
-							Error:  &container.Status{Message: "operation failed"},
-						}
-						return clients
-					}(test.DefaultClients())),
-				nodePool: &container.NodePool{
-					Name: "np",
-				},
-			},
+			clients: func(clients *pkg.Clients) *pkg.Clients {
+				clients.Container.(*test.FakeContainer).GetOperationResp = &container.Operation{
+					Name:   "op",
+					Status: test.OperationDone,
+					Error:  &container.Status{Message: "operation failed"},
+				}
+				return clients
+			}(test.DefaultClients()),
+			wait:    true,
 			wantErr: "error waiting on Operation projects/test-project/locations/region-a/operations/operation-update-nodepool: operation failed",
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.desc, func(t *testing.T) {
+			m := testNodePoolMigrator()
+			m.clients = tc.clients
+			m.opts.WaitForNodeUpgrade = tc.wait
 			buf := &bytes.Buffer{}
 			log.StandardLogger().SetOutput(buf)
 
-			err := tc.m.migrate(tc.ctx)
+			err := m.migrate(context.Background())
 			if diff := test.ErrorDiff(tc.wantErr, err); diff != "" {
 				t.Errorf("nodePoolMigrator.Migrate diff (-want +got):\n%s", diff)
 			}
-
 			if diff := !strings.Contains(buf.String(), tc.wantLog); tc.wantLog != "" && diff {
 				t.Errorf("nodePoolMigrator.migrate missing log output:\n\twanted entry: %s\n\tgot entries: %s", tc.wantLog, buf.String())
 			}
@@ -366,5 +331,29 @@ func TestGetName(t *testing.T) {
 				t.Errorf("getName diff (-want +got):\n%s", diff)
 			}
 		})
+	}
+}
+
+func testNodePoolMigrator() *nodePoolMigrator {
+	return &nodePoolMigrator{
+		clusterMigrator: &clusterMigrator{
+			projectID: test.ProjectName,
+			cluster: &container.Cluster{
+				Name:     test.ClusterName,
+				Location: test.RegionA,
+				Network:  test.SelectedNetwork,
+				ReleaseChannel: &container.ReleaseChannel{
+					Channel: "UNSPECIFIED",
+				},
+			},
+			opts:                               &Options{},
+			handler:                            testHandler,
+			clients:                            test.DefaultClients(),
+			serverConfig:                       ServerConfig,
+			resolvedDesiredControlPlaneVersion: "",
+		},
+		nodePool: &container.NodePool{
+			Name: "pool",
+		},
 	}
 }

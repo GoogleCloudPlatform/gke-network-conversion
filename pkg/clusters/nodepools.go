@@ -36,6 +36,9 @@ var (
 type nodePoolMigrator struct {
 	*clusterMigrator
 	nodePool *container.NodePool
+
+	// Field(s) populated during Complete.
+	resolvedDesiredNodeVersion string
 }
 
 func NewNodePool(
@@ -45,6 +48,51 @@ func NewNodePool(
 		clusterMigrator: clusterMigrator,
 		nodePool:        nodePool,
 	}
+}
+
+// Complete finalizes the initialization of the nodePoolMigrator.
+func (m *nodePoolMigrator) Complete(_ context.Context) error {
+	def, valid := getVersions(m.serverConfig, m.cluster.ReleaseChannel.Channel, Node)
+	if m.opts.DesiredNodeVersion == DefaultVersion {
+		// Node pool upgrade using default alias selects the control plane version.
+		// See: https://cloud.google.com/kubernetes-engine/docs/reference/rest/v1/projects.zones.clusters.nodePools/update#request-body
+		def = m.resolvedDesiredControlPlaneVersion
+	}
+
+	var err error
+	m.resolvedDesiredNodeVersion, err = resolveVersion(m.opts.DesiredNodeVersion, def, valid)
+	if err != nil {
+		return  m.wrap(err, "Complete")
+	}
+
+	return nil
+}
+
+// Validate ensures a NodePool upgrade is an allowed upgrade path.
+func (m *nodePoolMigrator) Validate(_ context.Context) error {
+	var (
+		desired  = m.opts.DesiredNodeVersion
+		resolved = m.resolvedDesiredNodeVersion
+		current  = m.nodePool.Version
+
+		// Wrap errors with node pool and method context.
+		wrap = func(err error) error {
+			return m.wrap(err, "Validation")
+		}
+	)
+	_, valid := getVersions(m.serverConfig, m.cluster.ReleaseChannel.Channel, Node)
+	if err := isUpgrade(resolved, current, valid, false); err != nil {
+		return wrap(err)
+	}
+
+	if err := IsWithinVersionSkew(resolved, m.resolvedDesiredControlPlaneVersion, MaxVersionSkew); err != nil {
+		return wrap(err)
+	}
+
+	log.Infof("Upgrade for NodePool %s is valid; desired: %q (%s), current: %s",
+		m.NodePoolPath(), desired, resolved, current)
+
+	return nil
 }
 
 // Migrate performs a NodePool upgrade is deemed necessary.
@@ -65,11 +113,10 @@ func (m *nodePoolMigrator) Migrate(ctx context.Context) error {
 
 func (m *nodePoolMigrator) migrate(ctx context.Context) error {
 	npp := m.NodePoolPath()
-	version := m.opts.DesiredNodeVersion
-	if m.opts.InPlaceUpgrade {
-		version = m.nodePool.Version
+	req := &container.UpdateNodePoolRequest{
+		Name:        npp,
+		NodeVersion: m.resolvedDesiredNodeVersion,
 	}
-	req := &container.UpdateNodePoolRequest{Name: npp, NodeVersion: version}
 	log.Infof("Upgrading NodePool %s to version %q", npp, req.NodeVersion)
 	op, err := m.clients.Container.UpdateNodePool(ctx, req)
 	if err != nil {
@@ -96,6 +143,16 @@ func (m *nodePoolMigrator) migrate(ctx context.Context) error {
 	}
 
 	log.Infof("NodePool %s upgraded. ", path)
+
+	required, err := m.requiresUpgrade(ctx)
+	if err != nil {
+		return fmt.Errorf("unable to verify post-upgrade state for NodePool %s: %w", m.NodePoolPath(), err)
+	}
+	if required {
+		// This should not happen, as the cluster must first be successfully migrated.
+		return fmt.Errorf("state was not patched for NodePool %s", m.NodePoolPath())
+	}
+
 	return nil
 }
 
@@ -156,4 +213,10 @@ func (m *nodePoolMigrator) requiresUpgrade(ctx context.Context) (bool, error) {
 func getName(path string) string {
 	s := strings.Split(path, "/")
 	return s[len(s)-1]
+}
+
+// wrap contextualizes errors during nodePoolMigrator methods
+func (m *nodePoolMigrator) wrap(err error, stage string) error {
+	//goland:noinspection ALL
+	return fmt.Errorf("NodePool %s error during %s: %w", m.NodePoolPath(), stage, err)
 }

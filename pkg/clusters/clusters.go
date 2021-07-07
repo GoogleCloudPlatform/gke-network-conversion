@@ -32,7 +32,7 @@ type Options struct {
 	WaitForNodeUpgrade         bool
 	DesiredControlPlaneVersion string
 	DesiredNodeVersion         string
-	InPlaceUpgrade             bool
+	InPlaceControlPlaneUpgrade bool
 }
 
 type clusterMigrator struct {
@@ -42,6 +42,11 @@ type clusterMigrator struct {
 	clients   *pkg.Clients
 	opts      *Options
 	factory   func(n *container.NodePool) migrate.Migrator
+
+	// Field(s) populated during Complete.
+	resolvedDesiredControlPlaneVersion string
+	serverConfig                       *container.ServerConfig
+	children                           []migrate.Migrator
 }
 
 func New(
@@ -63,6 +68,52 @@ func New(
 	return m
 }
 
+// Complete initializes this migrator instance.
+func (m *clusterMigrator) Complete(ctx context.Context) error {
+	resp, err := m.clients.Container.ListNodePools(ctx, m.ClusterPath())
+	if err != nil {
+		return fmt.Errorf("error retrieving NodePools for Cluster %s: %w", m.ClusterPath(), err)
+	}
+	path := pkg.LocationPath(m.projectID, m.cluster.Location)
+	m.serverConfig, err = m.clients.Container.GetServerConfig(ctx, path)
+	if err != nil {
+		return fmt.Errorf("error retrieving ServerConfig for Cluster %s: %w", m.ClusterPath(), err)
+	}
+
+	def, valid := getVersions(m.serverConfig, m.cluster.ReleaseChannel.Channel, ControlPlane)
+	if m.opts.InPlaceControlPlaneUpgrade {
+		m.resolvedDesiredControlPlaneVersion = m.cluster.CurrentMasterVersion
+	} else {
+		m.resolvedDesiredControlPlaneVersion, err = resolveVersion(m.opts.DesiredControlPlaneVersion, def, valid)
+		if err != nil {
+			return err
+		}
+	}
+
+	m.children = make([]migrate.Migrator, len(resp.NodePools))
+	for i, np := range resp.NodePools {
+		m.children[i] = m.factory(np)
+	}
+
+	log.Infof("Initialize NodePool migrators for Cluster %s", m.ClusterPath())
+	sem := make(chan struct{}, m.opts.ConcurrentNodePools)
+	return migrate.Complete(ctx, sem, m.children...)
+}
+
+// Validate confirms that this an any child migrators are valid.
+func (m *clusterMigrator) Validate(ctx context.Context) error {
+	_, valid := getVersions(m.serverConfig, m.cluster.ReleaseChannel.Channel, ControlPlane)
+	if err := isUpgrade(m.resolvedDesiredControlPlaneVersion, m.cluster.CurrentMasterVersion, valid, true); err != nil {
+		return err
+	}
+
+	log.Infof("Upgrade for Cluster %s is valid; desired: %q (%s), current: %s",
+		m.ClusterPath(), m.opts.DesiredControlPlaneVersion, m.resolvedDesiredControlPlaneVersion, m.cluster.CurrentMasterVersion)
+	log.Infof("Validate NodePool migrators for Cluster %s", m.ClusterPath())
+	sem := make(chan struct{}, m.opts.ConcurrentNodePools)
+	return migrate.Validate(ctx, sem, m.children...)
+}
+
 // Migrate performs upgrade on the Cluster
 func (m *clusterMigrator) Migrate(ctx context.Context) error {
 	if err := m.upgradeControlPlane(ctx); err != nil {
@@ -78,13 +129,9 @@ func (m *clusterMigrator) upgradeControlPlane(ctx context.Context) error {
 		return nil
 	}
 
-	version := m.opts.DesiredControlPlaneVersion
-	if m.opts.InPlaceUpgrade {
-		version = m.cluster.CurrentMasterVersion
-	}
 	req := &container.UpdateMasterRequest{
 		Name:          m.ClusterPath(),
-		MasterVersion: version,
+		MasterVersion: m.resolvedDesiredControlPlaneVersion,
 	}
 
 	log.Infof("Upgrading control plane for Cluster %q to version %q", req.Name, req.MasterVersion)
@@ -135,7 +182,7 @@ func (m *clusterMigrator) upgradeNodePools(ctx context.Context) error {
 
 	log.Infof("Initiate NodePool upgrades for Cluster %s", m.ClusterPath())
 	sem := make(chan struct{}, m.opts.ConcurrentNodePools)
-	return migrate.Run(ctx, sem, npMigrators...)
+	return migrate.Migrate(ctx, sem, npMigrators...)
 }
 
 // ClusterPath formats identifying information about the cluster.
