@@ -1,7 +1,7 @@
 /*
 Copyright © 2021 Google
 
-Licensed under the Apache License, Version 2.0 (the "License");
+Licensed under the Apache License, version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
@@ -33,6 +33,113 @@ var (
 	testHandler = operations.NewHandler(1*time.Microsecond, 1*time.Millisecond)
 )
 
+func TestNetworkMigrator_Complete(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	legacyNetwork := &compute.Network{
+		Name:      test.SelectedNetwork,
+		IPv4Range: "10.20.0.0/16",
+	}
+
+	cases := []struct {
+		desc         string
+		ctx          context.Context
+		m            *networkMigrator
+		wantChildren int
+		wantErr      string
+	}{
+		{
+			desc: "ListClusterError",
+			ctx:  ctx,
+			m: testNetworkMigrator(
+				legacyNetwork,
+				func(clients *pkg.Clients) *pkg.Clients {
+					clients.Container.(*test.FakeContainer).ListClustersErr = errors.New("list cluster err")
+					return clients
+				}(test.DefaultClients()),
+			),
+			wantErr: "list cluster err",
+		},
+		{
+			desc: "Success",
+			ctx:  ctx,
+			m: testNetworkMigrator(
+				legacyNetwork,
+				test.DefaultClients(),
+			),
+			wantChildren: len(test.DefaultFakeContainer().ListClustersResp.Clusters),
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			err := tc.m.Complete(tc.ctx)
+			if diff := test.ErrorDiff(tc.wantErr, err); diff != "" {
+				t.Errorf("networkMigrator.Complete diff (-want +got):\n%s", diff)
+			}
+
+			gotChildren := len(tc.m.children)
+			if tc.wantChildren != gotChildren {
+				t.Errorf("networkMigrator.Complete did not produce expected child migrators (want: %d, got: %d)", tc.wantChildren, gotChildren)
+			}
+		})
+	}
+}
+
+func TestNetworkMigrator_Validate(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	canceled, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	legacyNetwork := &compute.Network{
+		Name:      test.SelectedNetwork,
+		IPv4Range: "10.20.0.0/16",
+	}
+
+	cases := []struct {
+		desc     string
+		ctx      context.Context
+		children []migrate.Migrator
+		wantErr  string
+	}{
+		{
+			desc: "Success",
+			ctx:  ctx,
+			children: []migrate.Migrator{
+				&migrate.FakeMigrator{},
+			},
+		},
+		{
+			desc: "Children validation error",
+			ctx:  ctx,
+			children: []migrate.Migrator{
+				&migrate.FakeMigrator{ValidateError: errors.New("validation error")},
+			},
+			wantErr: "validation error",
+		},
+		{
+			desc: "Context canceled",
+			ctx:  canceled,
+			children: []migrate.Migrator{
+				&migrate.FakeMigrator{},
+			},
+			wantErr: "context canceled",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			m := testNetworkMigrator(legacyNetwork, test.DefaultClients())
+			m.children = tc.children
+
+			err := m.Validate(tc.ctx)
+			if diff := test.ErrorDiff(tc.wantErr, err); diff != "" {
+				t.Errorf("networkMigrator.Validate diff (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 func TestNetworkMigrator_Migrate(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -54,24 +161,12 @@ func TestNetworkMigrator_Migrate(t *testing.T) {
 		{
 			desc: "Success",
 			ctx:  ctx,
-			m:    testMigrator(legacyNetwork, clients),
-		},
-		{
-			desc: "ListClusterError",
-			ctx:  ctx,
-			m: testMigrator(
-				legacyNetwork,
-				func(clients *pkg.Clients) *pkg.Clients {
-					clients.Container.(*test.FakeContainer).ListClustersErr = errors.New("list cluster err")
-					return clients
-				}(test.DefaultClients()),
-			),
-			wantErr: "list cluster err",
+			m:    testNetworkMigrator(legacyNetwork, clients),
 		},
 		{
 			desc: "Missing zones",
 			ctx:  ctx,
-			m: testMigrator(
+			m: testNetworkMigrator(
 				legacyNetwork,
 				func(clients *pkg.Clients) *pkg.Clients {
 					clients.Container.(*test.FakeContainer).ListClustersResp = &container.ListClustersResponse{
@@ -85,12 +180,12 @@ func TestNetworkMigrator_Migrate(t *testing.T) {
 		{
 			desc: "VPC Network",
 			ctx:  ctx,
-			m:    testMigrator(&compute.Network{Name: test.SelectedNetwork}, clients),
+			m:    testNetworkMigrator(&compute.Network{Name: test.SelectedNetwork}, clients),
 		},
 		{
 			desc: "SwitchToCustomMode error",
 			ctx:  ctx,
-			m: testMigrator(
+			m: testNetworkMigrator(
 				legacyNetwork,
 				func(clients *pkg.Clients) *pkg.Clients {
 					clients.Compute.(*test.FakeCompute).SwitchToCustomModeErr = errors.New("not allowlisted")
@@ -103,7 +198,7 @@ func TestNetworkMigrator_Migrate(t *testing.T) {
 		{
 			desc: "SwitchToCustomMode in progress",
 			ctx:  ctx,
-			m: testMigrator(
+			m: testNetworkMigrator(
 				legacyNetwork,
 				func(clients *pkg.Clients) *pkg.Clients {
 					clients.Compute.(*test.FakeCompute).SwitchToCustomModeErr = errors.New("operation: operation-abc-123 already in progress")
@@ -114,7 +209,7 @@ func TestNetworkMigrator_Migrate(t *testing.T) {
 		{
 			desc: "SwitchToCustomMode fails",
 			ctx:  ctx,
-			m: testMigrator(
+			m: testNetworkMigrator(
 				legacyNetwork,
 				func(clients *pkg.Clients) *pkg.Clients {
 					clients.Compute.(*test.FakeCompute).WaitOperationResp = &compute.Operation{
@@ -134,7 +229,7 @@ func TestNetworkMigrator_Migrate(t *testing.T) {
 		{
 			desc: "WaitOperation error",
 			ctx:  ctx,
-			m: testMigrator(
+			m: testNetworkMigrator(
 				legacyNetwork,
 				func(clients *pkg.Clients) *pkg.Clients {
 					clients.Compute.(*test.FakeCompute).WaitOperationErr = errors.New("wait error")
@@ -146,7 +241,7 @@ func TestNetworkMigrator_Migrate(t *testing.T) {
 		{
 			desc:    "Context cancelled",
 			ctx:     cancelled,
-			m:       testMigrator(legacyNetwork, clients),
+			m:       testNetworkMigrator(legacyNetwork, clients),
 			wantErr: "context error: context canceled",
 		},
 	}
@@ -160,13 +255,15 @@ func TestNetworkMigrator_Migrate(t *testing.T) {
 	}
 }
 
-func testMigrator(n *compute.Network, c *pkg.Clients) *networkMigrator {
+func testNetworkMigrator(n *compute.Network, c *pkg.Clients) *networkMigrator {
 	return &networkMigrator{
 		projectID:          test.ProjectName,
 		network:            n,
 		handler:            testHandler,
 		clients:            c,
 		concurrentClusters: 1,
-		factory:            func(c *container.Cluster) migrate.Migrator { return &test.FakeMigrator{} },
+		factory: func(c *container.Cluster) migrate.Migrator {
+			return &migrate.FakeMigrator{}
+		},
 	}
 }

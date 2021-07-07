@@ -1,7 +1,7 @@
 /*
 Copyright © 2021 Google
 
-Licensed under the Apache License, Version 2.0 (the "License");
+Licensed under the Apache License, version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
@@ -36,6 +36,8 @@ type networkMigrator struct {
 	clients            *pkg.Clients
 	concurrentClusters uint16
 	factory            func(c *container.Cluster) migrate.Migrator
+
+	children []migrate.Migrator
 }
 
 func New(
@@ -58,32 +60,45 @@ func New(
 	}
 }
 
-// Migrate performs the Network migration and then the cluster upgrades
-func (m *networkMigrator) Migrate(ctx context.Context) error {
-	parent := pkg.LocationPath(m.projectID, pkg.AnyLocation)
-	resp, err := m.clients.Container.ListClusters(ctx, parent)
+// Complete finishes initializing the networkMigrator.
+func (m *networkMigrator) Complete(ctx context.Context) error {
+	path := pkg.LocationPath(m.projectID, pkg.AnyLocation)
+	resp, err := m.clients.Container.ListClusters(ctx, path)
 	if err != nil {
 		return fmt.Errorf("error listing Clusters: %w", err)
 	}
 
-	return m.migrate(ctx, resp)
-}
-
-func (m *networkMigrator) migrate(ctx context.Context, cr *container.ListClustersResponse) error {
-	if len(cr.MissingZones) > 0 {
-		log.Warnf("Clusters.List response is missing zones: %v", cr.MissingZones)
+	if len(resp.MissingZones) > 0 {
+		log.Warnf("Clusters.List response is missing zones: %v", resp.MissingZones)
 	}
 
 	filteredClusters := make([]*container.Cluster, 0)
-	for _, c := range cr.Clusters {
+	for _, c := range resp.Clusters {
 		if c.Network == m.network.Name {
 			filteredClusters = append(filteredClusters, c)
 		}
 	}
 
+	m.children = make([]migrate.Migrator, len(filteredClusters))
+	for i, c := range filteredClusters {
+		m.children[i] = m.factory(c)
+	}
+
+	sem := make(chan struct{}, m.concurrentClusters)
+	return migrate.Complete(ctx, sem, m.children...)
+}
+
+// Validate ensures child migrators can be run without error.
+func (m *networkMigrator) Validate(ctx context.Context) error {
+	sem := make(chan struct{}, m.concurrentClusters)
+	return migrate.Validate(ctx, sem, m.children...)
+}
+
+// Migrate performs the network migration and then the cluster upgrades.
+func (m *networkMigrator) Migrate(ctx context.Context) error {
 	// API returns error if no GCE resource with an internal IP (e.g. Cluster) is present on the Network:
 	//  "No internal IP resources on the Network. This network does not need to be migrated."
-	if len(filteredClusters) == 0 {
+	if len(m.children) == 0 {
 		log.Warnf("Network %q contains no clusters.", m.network.Name)
 	}
 
@@ -91,11 +106,7 @@ func (m *networkMigrator) migrate(ctx context.Context, cr *container.ListCluster
 		return err
 	}
 
-	cms := make([]migrate.Migrator, len(filteredClusters))
-	for i, c := range filteredClusters {
-		cms[i] = m.factory(c)
-	}
-	return m.migrateClusters(ctx, cms)
+	return m.migrateClusters(ctx)
 }
 
 func (m *networkMigrator) migrateNetwork(ctx context.Context) error {
@@ -128,10 +139,10 @@ func (m *networkMigrator) migrateNetwork(ctx context.Context) error {
 	return nil
 }
 
-func (m *networkMigrator) migrateClusters(ctx context.Context, migrators []migrate.Migrator) error {
+func (m *networkMigrator) migrateClusters(ctx context.Context) error {
 	log.Infof("Initiate upgrades for cluster(s) on network %q", m.network.Name)
 	sem := make(chan struct{}, m.concurrentClusters)
-	return migrate.Run(ctx, sem, migrators...)
+	return migrate.Migrate(ctx, sem, m.children...)
 }
 
 type ComputeOperation struct {
