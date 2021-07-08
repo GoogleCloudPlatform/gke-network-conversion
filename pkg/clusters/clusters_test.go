@@ -255,18 +255,6 @@ func TestClusterMigrator_Migrate(t *testing.T) {
 			wantErr: "subnetwork field is empty for cluster",
 		},
 		{
-			desc: "ListNodePools error",
-			ctx:  ctx,
-			m: testClusterMigrator(
-				&c,
-				testOptions,
-				func(clients *pkg.Clients) *pkg.Clients {
-					clients.Container.(*test.FakeContainer).ListNodePoolsErr = errors.New("cannot list nodePools")
-					return clients
-				}(test.DefaultClients())),
-			wantErr: "error retrieving NodePools",
-		},
-		{
 			desc: "Polling failure",
 			ctx:  ctx,
 			m: testClusterMigrator(

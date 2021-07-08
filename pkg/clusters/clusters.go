@@ -172,19 +172,9 @@ func (m *clusterMigrator) upgradeControlPlane(ctx context.Context) error {
 // upgradeNodePools upgrades all Nodes for a clusters.
 // This is to ensure that the instance templates for the nodes
 func (m *clusterMigrator) upgradeNodePools(ctx context.Context) error {
-	resp, err := m.clients.Container.ListNodePools(ctx, m.ClusterPath())
-	if err != nil {
-		return fmt.Errorf("error retrieving NodePools for Cluster %s: %w", m.ClusterPath(), err)
-	}
-
-	npMigrators := make([]migrate.Migrator, len(resp.NodePools))
-	for i, np := range resp.NodePools {
-		npMigrators[i] = m.factory(np)
-	}
-
 	log.Infof("Initiate NodePool upgrades for Cluster %s", m.ClusterPath())
 	sem := make(chan struct{}, m.opts.ConcurrentNodePools)
-	return migrate.Migrate(ctx, sem, npMigrators...)
+	return migrate.Migrate(ctx, sem, m.children...)
 }
 
 // ClusterPath formats identifying information about the cluster.
