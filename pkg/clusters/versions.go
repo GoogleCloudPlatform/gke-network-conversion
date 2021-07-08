@@ -16,11 +16,13 @@ limitations under the License.
 package clusters
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 
 	"google.golang.org/api/container/v1"
+	"legacymigration/pkg"
 )
 
 type Resource int
@@ -30,7 +32,7 @@ const (
 	ControlPlane
 
 	// This is the maximum version skew allowed for auto-upgrade clusters.
-	// This is used rather than the Kubernetes version skew
+	// This is used rather than the Kubernetes version skew (2).
 	MaxVersionSkew = 1
 
 	DefaultVersion = "-"
@@ -57,13 +59,15 @@ func getVersions(sc *container.ServerConfig, cc string, res Resource) (string, [
 			return c.DefaultVersion, c.ValidVersions
 		}
 	}
-	// should not happen, but fallback just in case.
 	return defaultVersion, validVersions
 }
 
 // IsFormatValid ensures that the version string is a valid GKE version or version alias.
 // See: https://cloud.google.com/kubernetes-engine/versioning#specifying_cluster_version
 func IsFormatValid(s string) error {
+	if s == "" {
+		return errors.New("malformed version: version must not be empty")
+	}
 	if s == "-" || s == "latest" {
 		return nil
 	}
@@ -216,6 +220,16 @@ func GetMinorVersion(v string) (int, error) {
 	split := strings.Split(v, ".")
 	return strconv.Atoi(split[1])
 }
+
+// getReleaseChannel returns the release channel if present.
+// Otherwise, it returns unspecified.
+func getReleaseChannel(rc *container.ReleaseChannel) string {
+	if rc != nil {
+		return  rc.Channel
+	}
+	return pkg.Unspecified
+}
+
 
 // abs returns the absolute value of x.
 func abs(x int) int {

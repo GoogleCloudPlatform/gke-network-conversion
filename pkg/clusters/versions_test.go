@@ -167,6 +167,10 @@ func TestIsFormatValid(t *testing.T) {
 		wantErr string
 	}{
 		{
+			desc:    "Empty",
+			wantErr: "malformed version: version must not be empty",
+		},
+		{
 			desc:    "Major-Minor",
 			version: "1.20",
 		},

@@ -52,7 +52,7 @@ func NewNodePool(
 
 // Complete finalizes the initialization of the nodePoolMigrator.
 func (m *nodePoolMigrator) Complete(_ context.Context) error {
-	def, valid := getVersions(m.serverConfig, m.cluster.ReleaseChannel.Channel, Node)
+	def, valid := getVersions(m.serverConfig, m.releaseChannel, Node)
 	if m.opts.DesiredNodeVersion == DefaultVersion {
 		// Node pool upgrade using default alias selects the control plane version.
 		// See: https://cloud.google.com/kubernetes-engine/docs/reference/rest/v1/projects.zones.clusters.nodePools/update#request-body
@@ -62,7 +62,7 @@ func (m *nodePoolMigrator) Complete(_ context.Context) error {
 	var err error
 	m.resolvedDesiredNodeVersion, err = resolveVersion(m.opts.DesiredNodeVersion, def, valid)
 	if err != nil {
-		return  m.wrap(err, "Complete")
+		return m.wrap(err, "Complete")
 	}
 
 	return nil
@@ -80,7 +80,7 @@ func (m *nodePoolMigrator) Validate(_ context.Context) error {
 			return m.wrap(err, "Validation")
 		}
 	)
-	_, valid := getVersions(m.serverConfig, m.cluster.ReleaseChannel.Channel, Node)
+	_, valid := getVersions(m.serverConfig, m.releaseChannel, Node)
 	if err := isUpgrade(resolved, current, valid, false); err != nil {
 		return wrap(err)
 	}

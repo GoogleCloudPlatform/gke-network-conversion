@@ -46,6 +46,7 @@ type clusterMigrator struct {
 	// Field(s) populated during Complete.
 	resolvedDesiredControlPlaneVersion string
 	serverConfig                       *container.ServerConfig
+	releaseChannel                     string
 	children                           []migrate.Migrator
 }
 
@@ -80,7 +81,8 @@ func (m *clusterMigrator) Complete(ctx context.Context) error {
 		return fmt.Errorf("error retrieving ServerConfig for Cluster %s: %w", m.ClusterPath(), err)
 	}
 
-	def, valid := getVersions(m.serverConfig, m.cluster.ReleaseChannel.Channel, ControlPlane)
+	m.releaseChannel = getReleaseChannel(m.cluster.ReleaseChannel)
+	def, valid := getVersions(m.serverConfig, m.releaseChannel, ControlPlane)
 	if m.opts.InPlaceControlPlaneUpgrade {
 		m.resolvedDesiredControlPlaneVersion = m.cluster.CurrentMasterVersion
 	} else {
@@ -102,7 +104,7 @@ func (m *clusterMigrator) Complete(ctx context.Context) error {
 
 // Validate confirms that this an any child migrators are valid.
 func (m *clusterMigrator) Validate(ctx context.Context) error {
-	_, valid := getVersions(m.serverConfig, m.cluster.ReleaseChannel.Channel, ControlPlane)
+	_, valid := getVersions(m.serverConfig, m.releaseChannel, ControlPlane)
 	if err := isUpgrade(m.resolvedDesiredControlPlaneVersion, m.cluster.CurrentMasterVersion, valid, true); err != nil {
 		return err
 	}
