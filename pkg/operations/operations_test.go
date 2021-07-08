@@ -81,7 +81,7 @@ func TestWait(t *testing.T) {
 			},
 			h: HandlerImpl{
 				interval: 1 * time.Microsecond,
-				deadline: 1 * time.Millisecond,
+				deadline: 1 * time.Second,
 			},
 			wantErr: "",
 		},
@@ -99,7 +99,7 @@ func TestWait(t *testing.T) {
 			},
 			h: HandlerImpl{
 				interval: 1 * time.Microsecond,
-				deadline: 1 * time.Millisecond,
+				deadline: 1 * time.Second,
 			},
 			wantErr: "",
 		},
@@ -117,7 +117,7 @@ func TestWait(t *testing.T) {
 			},
 			h: HandlerImpl{
 				interval: 1 * time.Microsecond,
-				deadline: 1 * time.Millisecond,
+				deadline: 1 * time.Second,
 			},
 			wantErr: "operation get error",
 		},
@@ -151,7 +151,7 @@ func TestWait(t *testing.T) {
 			},
 			h: HandlerImpl{
 				interval: 2 * time.Microsecond,
-				deadline: 1 * time.Microsecond,
+				deadline: 1 * time.Millisecond,
 			},
 			wantErr: "context error",
 		},

@@ -35,11 +35,11 @@ const (
 	ComputeAPI                      = "https://compute.googleapis.com/compute/v1"
 	ContainerAPI                    = "https://container.googleapis.com/compute/v1"
 
-	// Version constants
-	NoChannel = ""
-	Rapid     = "Rapid"
-	Regular   = "Regular"
-	Stable    = "Stable"
+	// Release channel types.
+	Unspecified = "UNSPECIFIED"
+	Rapid       = "RAPID"
+	Regular     = "REGULAR"
+	Stable      = "STABLE"
 )
 
 var (

@@ -30,6 +30,10 @@ var (
 		Name:     ClusterName,
 		Location: RegionA,
 		Network:  SelectedNetwork,
+		ReleaseChannel: &container.ReleaseChannel{
+			Channel: Unspecified,
+		},
+		CurrentMasterVersion: "1.19.10-gke.1700",
 	}
 )
 

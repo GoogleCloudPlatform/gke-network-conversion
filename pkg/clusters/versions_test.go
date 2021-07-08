@@ -88,15 +88,15 @@ func TestGetVersions(t *testing.T) {
 		wantVersions []string
 	}{
 		{
-			desc:         "NoChannel, ControlPlane",
-			channel:      test.NoChannel,
+			desc:         "Unspecified, ControlPlane",
+			channel:      test.Unspecified,
 			resource:     ControlPlane,
 			wantDefault:  ServerConfig.DefaultClusterVersion,
 			wantVersions: ServerConfig.ValidMasterVersions,
 		},
 		{
-			desc:         "NoChannel, Node",
-			channel:      test.NoChannel,
+			desc:         "Unspecified, Node",
+			channel:      test.Unspecified,
 			resource:     Node,
 			wantDefault:  ServerConfig.DefaultClusterVersion,
 			wantVersions: ServerConfig.ValidNodeVersions,

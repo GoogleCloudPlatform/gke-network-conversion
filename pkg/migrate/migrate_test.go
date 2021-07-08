@@ -26,39 +26,6 @@ import (
 	"legacymigration/test"
 )
 
-type FakeMigrator struct {
-	CompleteError error
-	ValidateError error
-	MigrateError  error
-}
-
-func (m *FakeMigrator) Complete(ctx context.Context) error {
-	select {
-	case <-ctx.Done():
-		return errors.New("context done")
-	default:
-		return m.CompleteError
-	}
-}
-
-func (m *FakeMigrator) Validate(ctx context.Context) error {
-	select {
-	case <-ctx.Done():
-		return errors.New("context done")
-	default:
-		return m.ValidateError
-	}
-}
-
-func (m *FakeMigrator) Migrate(ctx context.Context) error {
-	select {
-	case <-ctx.Done():
-		return errors.New("context done")
-	default:
-		return m.MigrateError
-	}
-}
-
 func TestMigrate_Run(t *testing.T) {
 	cancelled, cancel := context.WithCancel(context.Background())
 	cancel()
