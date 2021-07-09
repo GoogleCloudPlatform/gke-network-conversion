@@ -121,7 +121,8 @@ func (m *nodePoolMigrator) migrate(ctx context.Context) error {
 	op, err := m.clients.Container.UpdateNodePool(ctx, req)
 	if err != nil {
 		original := err
-		if op, err = m.clients.Container.GetOperation(ctx, operations.ObtainID(err)); err != nil {
+		name := pkg.OperationsPath(m.projectID, m.cluster.Location, operations.ObtainID(err))
+		if op, err = m.clients.Container.GetOperation(ctx, name); err != nil {
 			return fmt.Errorf("error upgrading NodePool %s: %w", npp, original)
 		}
 	}

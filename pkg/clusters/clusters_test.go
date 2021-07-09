@@ -213,7 +213,7 @@ func TestClusterMigrator_Migrate(t *testing.T) {
 				&c,
 				testOptions,
 				func(clients *pkg.Clients) *pkg.Clients {
-					clients.Container.(*test.FakeContainer).UpdateMasterErr = errors.New("operation projects/test-project/locations/region-a/operations/operation-update-master already in progress")
+					clients.Container.(*test.FakeContainer).UpdateMasterErr = errors.New("operation operation-update-master already in progress")
 					return clients
 				}(test.DefaultClients())),
 		},

@@ -141,7 +141,8 @@ func (m *clusterMigrator) upgradeControlPlane(ctx context.Context) error {
 	op, err := m.clients.Container.UpdateMaster(ctx, req)
 	if err != nil {
 		original := err
-		if op, err = m.clients.Container.GetOperation(ctx, operations.ObtainID(err)); err != nil {
+		name := pkg.OperationsPath(m.projectID, m.cluster.Location, operations.ObtainID(err))
+		if op, err = m.clients.Container.GetOperation(ctx, name); err != nil {
 			return fmt.Errorf("error upgrading control plane for Cluster %s: %w", m.ClusterPath(), original)
 		}
 	}
