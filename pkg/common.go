@@ -41,10 +41,7 @@ const (
 	nodePoolPath  = clusterPath + "/nodePools/%s"
 	operationPath = locationPath + "/operations/%s"
 
-	// GKE version constants
-	// See: https://cloud.google.com/kubernetes-engine/docs/reference/rest/v1beta1/projects.locations.clusters/updateMaster#request-body
-	DefaultVersion = "-"
-	AnyLocation    = "-"
+	AnyLocation = "-"
 
 	Unspecified = "UNSPECIFIED"
 )

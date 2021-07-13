@@ -33,7 +33,7 @@ var (
 	testHandler = operations.NewHandler(1*time.Microsecond, 1*time.Millisecond)
 	testOptions = &Options{
 		ConcurrentNodePools:        1,
-		DesiredControlPlaneVersion: pkg.DefaultVersion,
+		DesiredControlPlaneVersion: DefaultVersion,
 		InPlaceControlPlaneUpgrade: false,
 	}
 )
