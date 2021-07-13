@@ -29,7 +29,6 @@ import (
 // Cluster and NodePoolOptions
 type Options struct {
 	ConcurrentNodePools        uint16
-	WaitForNodeUpgrade         bool
 	DesiredControlPlaneVersion string
 	DesiredNodeVersion         string
 	InPlaceControlPlaneUpgrade bool
@@ -106,7 +105,7 @@ func (m *clusterMigrator) Complete(ctx context.Context) error {
 func (m *clusterMigrator) Validate(ctx context.Context) error {
 	_, valid := getVersions(m.serverConfig, m.releaseChannel, ControlPlane)
 	if err := isUpgrade(m.resolvedDesiredControlPlaneVersion, m.cluster.CurrentMasterVersion, valid, true); err != nil {
-		return err
+		return fmt.Errorf("validation error for Cluster %s: %w", m.ClusterPath(), err)
 	}
 
 	log.Infof("Upgrade for Cluster %s is valid; desired: %q (%s), current: %s",

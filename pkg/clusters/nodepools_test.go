@@ -215,14 +215,13 @@ func TestNodePoolMigrator_Migrate(t *testing.T) {
 	cases := []struct {
 		desc    string
 		clients *pkg.Clients
-		wait    bool
 		wantErr string
 		wantLog string
 	}{
 		{
-			desc:    "Do not wait for upgrade",
+			desc:    "Migrate node pool",
 			clients: test.DefaultClients(),
-			wantLog: "Not waiting on upgrade for NodePool",
+			wantLog: "NodePool projects/test-project/locations/region-a/operations/operation-update-nodepool upgraded",
 		},
 		{
 			desc: "UpdateNodePool error",
@@ -231,7 +230,6 @@ func TestNodePoolMigrator_Migrate(t *testing.T) {
 				clients.Container.(*test.FakeContainer).GetOperationErr = errors.New("not found")
 				return clients
 			}(test.DefaultClients()),
-			wait:    true,
 			wantErr: "error upgrading NodePool",
 		},
 		{
@@ -240,16 +238,7 @@ func TestNodePoolMigrator_Migrate(t *testing.T) {
 				clients.Container.(*test.FakeContainer).UpdateNodePoolErr = errors.New("operation: operation-abc-123 already in progress")
 				return clients
 			}(test.DefaultClients()),
-			wait:    true,
 			wantLog: "upgraded",
-		},
-		{
-			desc: "Not waiting on NodePool upgrade in progress",
-			clients: func(clients *pkg.Clients) *pkg.Clients {
-				clients.Container.(*test.FakeContainer).UpdateNodePoolErr = errors.New("operation: operation-abc-123 already in progress")
-				return clients
-			}(test.DefaultClients()),
-			wantLog: "Not waiting on upgrade for NodePool",
 		},
 		{
 			desc: "Polling failure during UpdateNodePool operation",
@@ -257,7 +246,6 @@ func TestNodePoolMigrator_Migrate(t *testing.T) {
 				clients.Container.(*test.FakeContainer).GetOperationErr = errors.New("operation get failed")
 				return clients
 			}(test.DefaultClients()),
-			wait:    true,
 			wantErr: "error retrieving Operation projects/test-project/locations/region-a/operations/operation-update-nodepool: operation get failed",
 		},
 		{
@@ -270,7 +258,6 @@ func TestNodePoolMigrator_Migrate(t *testing.T) {
 				}
 				return clients
 			}(test.DefaultClients()),
-			wait:    true,
 			wantErr: "error waiting on Operation projects/test-project/locations/region-a/operations/operation-update-nodepool: operation failed",
 		},
 	}
@@ -278,7 +265,6 @@ func TestNodePoolMigrator_Migrate(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			m := testNodePoolMigrator()
 			m.clients = tc.clients
-			m.opts.WaitForNodeUpgrade = tc.wait
 			buf := &bytes.Buffer{}
 			log.StandardLogger().SetOutput(buf)
 

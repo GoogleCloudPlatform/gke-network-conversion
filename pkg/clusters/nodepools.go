@@ -133,13 +133,9 @@ func (m *nodePoolMigrator) migrate(ctx context.Context) error {
 		}
 	}
 
-	if !m.opts.WaitForNodeUpgrade {
-		log.Infof("Not waiting on upgrade for NodePool %s. To monitor, exec:\n\t"+
-			"gcloud container operations wait %s", npp, op.Name)
-		return nil
-	}
-
 	path := pkg.PathRegex.FindString(op.SelfLink)
+	log.Infof("Upgrade in progress for NodePool %s; operation: %s", npp, path)
+
 	w := &ContainerOperation{
 		ProjectID: m.projectID,
 		Path:      path,
