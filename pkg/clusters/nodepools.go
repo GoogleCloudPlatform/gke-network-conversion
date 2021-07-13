@@ -38,6 +38,7 @@ type nodePoolMigrator struct {
 	nodePool *container.NodePool
 
 	// Field(s) populated during Complete.
+	upgradeRequired            bool
 	resolvedDesiredNodeVersion string
 }
 
@@ -51,7 +52,13 @@ func NewNodePool(
 }
 
 // Complete finalizes the initialization of the nodePoolMigrator.
-func (m *nodePoolMigrator) Complete(_ context.Context) error {
+func (m *nodePoolMigrator) Complete(ctx context.Context) error {
+	var err error
+	m.upgradeRequired, err = m.isUpgradeRequired(ctx)
+	if err != nil {
+		return fmt.Errorf("unable to verify state for NodePool %s: %w", m.NodePoolPath(), err)
+	}
+
 	def, valid := getVersions(m.serverConfig, m.releaseChannel, Node)
 	if m.opts.DesiredNodeVersion == DefaultVersion {
 		// Node pool upgrade using default alias selects the control plane version.
@@ -59,7 +66,6 @@ func (m *nodePoolMigrator) Complete(_ context.Context) error {
 		def = m.resolvedDesiredControlPlaneVersion
 	}
 
-	var err error
 	m.resolvedDesiredNodeVersion, err = resolveVersion(m.opts.DesiredNodeVersion, def, valid)
 	if err != nil {
 		return m.wrap(err, "Complete")
@@ -70,6 +76,10 @@ func (m *nodePoolMigrator) Complete(_ context.Context) error {
 
 // Validate ensures a NodePool upgrade is an allowed upgrade path.
 func (m *nodePoolMigrator) Validate(_ context.Context) error {
+	if !m.upgradeRequired {
+		log.Infof("State of NodePool %s is valid; does not require an upgrade.", m.NodePoolPath())
+		return nil
+	}
 	var (
 		desired  = m.opts.DesiredNodeVersion
 		resolved = m.resolvedDesiredNodeVersion
@@ -97,12 +107,8 @@ func (m *nodePoolMigrator) Validate(_ context.Context) error {
 
 // Migrate performs a NodePool upgrade is deemed necessary.
 func (m *nodePoolMigrator) Migrate(ctx context.Context) error {
-	required, err := m.requiresUpgrade(ctx)
-	if err != nil {
-		return fmt.Errorf("not upgrading NodePool %s: %w", m.NodePoolPath(), err)
-	}
-	if !required {
-		log.Infof("Upgrade not required for NodePool %s; skipping.", m.NodePoolPath())
+	if !m.upgradeRequired {
+		log.Infof("Upgrade not required for NodePool %s; skipping upgrade.", m.NodePoolPath())
 		return nil
 	}
 
@@ -145,7 +151,7 @@ func (m *nodePoolMigrator) migrate(ctx context.Context) error {
 
 	log.Infof("NodePool %s upgraded. ", path)
 
-	required, err := m.requiresUpgrade(ctx)
+	required, err := m.isUpgradeRequired(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to verify post-upgrade state for NodePool %s: %w", m.NodePoolPath(), err)
 	}
@@ -162,8 +168,8 @@ func (m *nodePoolMigrator) NodePoolPath() string {
 	return pkg.NodePoolPath(m.projectID, m.cluster.Location, m.cluster.Name, m.nodePool.Name)
 }
 
-// requiresUpgrade returns whether to upgrade the NodePool based on the desired state.
-func (m *nodePoolMigrator) requiresUpgrade(ctx context.Context) (bool, error) {
+// isUpgradeRequired returns whether a the NodePool's state requires an upgrade.
+func (m *nodePoolMigrator) isUpgradeRequired(ctx context.Context) (bool, error) {
 	var (
 		errors   error
 		required bool

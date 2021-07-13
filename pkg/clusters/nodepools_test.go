@@ -137,19 +137,19 @@ func TestNodePoolMigrator_Validate(t *testing.T) {
 	}
 }
 
-func TestNodePoolMigrator_Migrate(t *testing.T) {
+func TestNodePoolMigrator_isUpgradeRequired(t *testing.T) {
 	cases := []struct {
 		desc    string
 		URLs    []string
+		want    bool
 		wantErr string
-		wantLog string
 	}{
 		{
 			desc: "Single InstanceGroupManager",
 			URLs: []string{
 				test.InstanceGroupManagerZoneA0,
 			},
-			wantLog: "Upgrading NodePool",
+			want: true,
 		},
 		{
 			desc: "Multiple InstanceGroupManagers",
@@ -157,19 +157,18 @@ func TestNodePoolMigrator_Migrate(t *testing.T) {
 				test.InstanceGroupManagerZoneA0,
 				test.InstanceGroupManagerZoneA1,
 			},
-			wantLog: "Upgrading NodePool",
+			want: true,
 		},
 		{
 			desc: "Regional InstanceGroupManager",
 			URLs: []string{
 				test.InstanceGroupManagerRegionA,
 			},
-			wantLog: "Upgrading NodePool",
+			want: true,
 		},
 		{
 			// No underlying template to update via an upgrade.
-			desc:    "No InstanceGroupManagers",
-			wantLog: "Upgrade not required for NodePool",
+			desc: "No InstanceGroupManagers",
 		},
 		{
 			// InstanceGroups do not have a NodeTemplate and should not appear in a InstanceGroup NodePool's list of URLs.
@@ -180,11 +179,11 @@ func TestNodePoolMigrator_Migrate(t *testing.T) {
 			wantErr: "error(s) encountered obtaining an InstanceTemplate for NodePool",
 		},
 		{
-			desc: "matching InstanceGroup",
+			desc: "Matching InstanceGroup",
 			URLs: []string{
 				test.InstanceGroupManagerZoneA1,
 			},
-			wantLog: "Upgrading NodePool",
+			want: true,
 		},
 		{
 			desc: "One matching InstanceGroup",
@@ -192,30 +191,27 @@ func TestNodePoolMigrator_Migrate(t *testing.T) {
 				fmt.Sprintf("%s/projects/%s/zones/%s/instanceGroups/%s", test.ComputeAPI, test.ProjectName, test.ZoneA0, "instanceGroup0"),
 				test.InstanceGroupManagerZoneA1,
 			},
-			wantLog: "Upgrading NodePool",
+			want: true,
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.desc, func(t *testing.T) {
 			m := testNodePoolMigrator()
-			m.resolvedDesiredNodeVersion = "1.19.11-gke.1700"
 			m.nodePool.InstanceGroupUrls = tc.URLs
-			buf := &bytes.Buffer{}
-			log.StandardLogger().SetOutput(buf)
 
-			err := m.Migrate(context.Background())
+			got, err := m.isUpgradeRequired(context.Background())
 			if diff := test.ErrorDiff(tc.wantErr, err); diff != "" {
-				t.Errorf("nodePoolMigrator.Migrate diff (-want +got):\n%s", diff)
+				t.Errorf("nodePoolMigrator.isUpgradeRequired error diff (-want +got):\n%s", diff)
 			}
 
-			if diff := !strings.Contains(buf.String(), tc.wantLog); tc.wantLog != "" && diff {
-				t.Errorf("nodePoolMigrator.Migrate missing log output:\n\twanted entry: %s\n\tgot entries: %s", tc.wantLog, buf.String())
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("nodePoolMigrator.isUpgradeRequired diff (-want +got):\n%s", diff)
 			}
 		})
 	}
 }
 
-func TestNodePoolMigrator_migrate(t *testing.T) {
+func TestNodePoolMigrator_Migrate(t *testing.T) {
 	cases := []struct {
 		desc    string
 		clients *pkg.Clients
@@ -286,12 +282,12 @@ func TestNodePoolMigrator_migrate(t *testing.T) {
 			buf := &bytes.Buffer{}
 			log.StandardLogger().SetOutput(buf)
 
-			err := m.migrate(context.Background())
+			err := m.Migrate(context.Background())
 			if diff := test.ErrorDiff(tc.wantErr, err); diff != "" {
 				t.Errorf("nodePoolMigrator.Migrate diff (-want +got):\n%s", diff)
 			}
 			if diff := !strings.Contains(buf.String(), tc.wantLog); tc.wantLog != "" && diff {
-				t.Errorf("nodePoolMigrator.migrate missing log output:\n\twanted entry: %s\n\tgot entries: %s", tc.wantLog, buf.String())
+				t.Errorf("nodePoolMigrator.Migrate missing log output:\n\twanted entry: %s\n\tgot entries: %s", tc.wantLog, buf.String())
 			}
 		})
 	}
@@ -355,5 +351,6 @@ func testNodePoolMigrator() *nodePoolMigrator {
 		nodePool: &container.NodePool{
 			Name: "pool",
 		},
+		upgradeRequired: true,
 	}
 }
