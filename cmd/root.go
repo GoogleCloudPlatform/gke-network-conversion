@@ -16,10 +16,10 @@ limitations under the License.
 package cmd
 
 import (
-  "io/ioutil"
-	"errors"
 	"context"
+	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"os/signal"
@@ -54,7 +54,7 @@ const (
 	inPlaceControlPlaneUpgradeFlag = "in-place-control-plane"
 	validateOnlyFlag               = "validate-only"
 
-	ConcurrentNetworks = 1
+	ConcurrentNetworks  = 1
 	ConcurrentNodePools = 1
 )
 
@@ -298,7 +298,7 @@ func getRetryableClientOption(retry int, waitMin, waitMax time.Duration, authedC
 }
 
 func fetchClients(ctx context.Context, basePath string, authedClient *http.Client) (*pkg.Clients, error) {
-	opt := getRetryableClientOption(3, 5 * time.Second, 30 * time.Second, authedClient)
+	opt := getRetryableClientOption(3, 5*time.Second, 30*time.Second, authedClient)
 	computeService, err := compute.NewService(ctx, opt)
 	if err != nil {
 		return nil, err
@@ -309,7 +309,7 @@ func fetchClients(ctx context.Context, basePath string, authedClient *http.Clien
 	}
 
 	// Retry for up-to 5 minutes for Compute Alpha API calls.
-	alphaOpt := getRetryableClientOption(5, 5 * time.Second, 160 * time.Second, authedClient)
+	alphaOpt := getRetryableClientOption(5, 5*time.Second, 160*time.Second, authedClient)
 	computeServiceAlpha, err := computealpha.NewService(ctx, alphaOpt)
 	if err != nil {
 		return nil, err

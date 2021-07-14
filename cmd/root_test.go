@@ -58,7 +58,7 @@ func TestMigrateOptions_ValidateFlags(t *testing.T) {
 			want: "--project not provided or empty",
 		},
 		{
-			desc: "concurrentClusters too low",
+			desc: "Concurrent clusters too low",
 			opts: func(o migrateOptions) migrateOptions {
 				o.concurrentClusters = 0
 				return o
@@ -66,7 +66,7 @@ func TestMigrateOptions_ValidateFlags(t *testing.T) {
 			want: "--concurrent-clusters must be an integer greater than 0",
 		},
 		{
-			desc: "polling too low",
+			desc: "Polling too low",
 			opts: func(o migrateOptions) migrateOptions {
 				o.pollingInterval = 1 * time.Second
 				return o
@@ -74,7 +74,7 @@ func TestMigrateOptions_ValidateFlags(t *testing.T) {
 			want: "--polling-interval must greater than or equal to 10 seconds",
 		},
 		{
-			desc: "pollingDeadline too low",
+			desc: "Deadline too low",
 			opts: func(o migrateOptions) migrateOptions {
 				o.pollingDeadline = 1 * time.Second
 				return o
@@ -82,7 +82,7 @@ func TestMigrateOptions_ValidateFlags(t *testing.T) {
 			want: "--polling-deadline must greater than or equal to 5 minutes",
 		},
 		{
-			desc: "polling greater than pollingDeadline",
+			desc: "Polling interval greater than deadline",
 			opts: func(o migrateOptions) migrateOptions {
 				o.pollingInterval = 1 * time.Hour
 				return o
@@ -116,7 +116,7 @@ func TestMigrateOptions_ValidateFlags(t *testing.T) {
 			}(defaultOptions()),
 		},
 		{
-			desc: "minor aliases provided",
+			desc: "Minor aliases provided",
 			opts: func(o migrateOptions) migrateOptions {
 				o.desiredControlPlaneVersion = "1.19"
 				o.desiredNodeVersion = "1.19"
@@ -234,12 +234,14 @@ func TestMigrateOptions_Run(t *testing.T) {
 			wantLog: "Initiate resource conversion",
 		},
 		{
+			desc: "Skip conversions",
 			opts: migrateOptions{
 				validateOnly: true,
 			},
 			wantLog: "skipping conversion",
 		},
 		{
+			desc: "Single conversion",
 			opts: migrateOptions{
 				migrators: []migrate.Migrator{
 					&migrate.FakeMigrator{},
@@ -248,6 +250,7 @@ func TestMigrateOptions_Run(t *testing.T) {
 			wantLog: "Initiate resource conversion.",
 		},
 		{
+			desc: "Conversion error",
 			opts: migrateOptions{
 				migrators: []migrate.Migrator{
 					&migrate.FakeMigrator{

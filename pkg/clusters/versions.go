@@ -1,7 +1,7 @@
 /*
 Copyright © 2021 Google
 
-Licensed under the Apache License, version 2.0 (the "License");
+Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
@@ -225,11 +225,10 @@ func GetMinorVersion(v string) (int, error) {
 // Otherwise, it returns unspecified.
 func getReleaseChannel(rc *container.ReleaseChannel) string {
 	if rc != nil {
-		return  rc.Channel
+		return rc.Channel
 	}
 	return pkg.Unspecified
 }
-
 
 // abs returns the absolute value of x.
 func abs(x int) int {
