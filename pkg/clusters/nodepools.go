@@ -146,7 +146,7 @@ func (m *nodePoolMigrator) migrate(ctx context.Context) error {
 		return fmt.Errorf("error waiting on Operation %s: %w", path, err)
 	}
 
-	log.Infof("NodePool %s upgraded. ", path)
+	log.Infof("NodePool %s upgraded. ", npp)
 
 	required, err := m.isUpgradeRequired(ctx)
 	if err != nil {

@@ -23,11 +23,12 @@ import (
 	"strings"
 	"testing"
 
+	"legacymigration/pkg"
+	"legacymigration/test"
+
 	"github.com/google/go-cmp/cmp"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/api/container/v1"
-	"legacymigration/pkg"
-	"legacymigration/test"
 )
 
 func TestNodePoolMigrator_Complete(t *testing.T) {
@@ -221,7 +222,7 @@ func TestNodePoolMigrator_Migrate(t *testing.T) {
 		{
 			desc:    "Migrate node pool",
 			clients: test.DefaultClients(),
-			wantLog: "NodePool projects/test-project/locations/region-a/operations/operation-update-nodepool upgraded",
+			wantLog: "NodePool projects/test-project/locations/region-a/clusters/cluster-c/nodePools/pool upgraded",
 		},
 		{
 			desc: "UpdateNodePool error",
