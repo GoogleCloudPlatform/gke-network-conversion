@@ -21,11 +21,12 @@ import (
 	"regexp"
 	"strings"
 
+	"legacymigration/pkg"
+	"legacymigration/pkg/operations"
+
 	log "github.com/sirupsen/logrus"
 	"go.uber.org/multierr"
 	"google.golang.org/api/container/v1"
-	"legacymigration/pkg"
-	"legacymigration/pkg/operations"
 )
 
 var (
@@ -112,7 +113,7 @@ func (m *nodePoolMigrator) Migrate(ctx context.Context) error {
 		return nil
 	}
 
-	log.Infof("Upgrading NodePool %s", m.NodePoolPath())
+	log.Infof("Upgrading NodePool %s to version %q", m.NodePoolPath(), m.resolvedDesiredNodeVersion)
 
 	return m.migrate(ctx)
 }
@@ -123,7 +124,7 @@ func (m *nodePoolMigrator) migrate(ctx context.Context) error {
 		Name:        npp,
 		NodeVersion: m.resolvedDesiredNodeVersion,
 	}
-	log.Infof("Upgrading NodePool %s to version %q", npp, req.NodeVersion)
+
 	op, err := m.clients.Container.UpdateNodePool(ctx, req)
 	if err != nil {
 		original := err
