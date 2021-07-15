@@ -21,12 +21,13 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/api/compute/v1"
-	"google.golang.org/api/container/v1"
 	"legacymigration/pkg"
 	"legacymigration/pkg/migrate"
 	"legacymigration/pkg/operations"
 	"legacymigration/test"
+
+	"google.golang.org/api/compute/v1"
+	"google.golang.org/api/container/v1"
 )
 
 var (
@@ -237,6 +238,30 @@ func TestNetworkMigrator_Migrate(t *testing.T) {
 				}(test.DefaultClients()),
 			),
 			wantErr: "wait error",
+		},
+		{
+			desc: "Unable to confirm conversion",
+			ctx:  ctx,
+			m: testNetworkMigrator(
+				legacyNetwork,
+				func(clients *pkg.Clients) *pkg.Clients {
+					clients.Compute.(*test.FakeCompute).GetNetworkErr = errors.New("get error")
+					return clients
+				}(test.DefaultClients()),
+			),
+			wantErr: `unable to confirm network "network-0" was converted: get error`,
+		},
+		{
+			desc: "Network not converted",
+			ctx:  ctx,
+			m: testNetworkMigrator(
+				legacyNetwork,
+				func(clients *pkg.Clients) *pkg.Clients {
+					clients.Compute.(*test.FakeCompute).GetNetworkResp = legacyNetwork
+					return clients
+				}(test.DefaultClients()),
+			),
+			wantErr: `network "network-0" was not converted; Network.IPv4Range (10.20.0.0/16) should be empty`,
 		},
 		{
 			desc:    "Context cancelled",
