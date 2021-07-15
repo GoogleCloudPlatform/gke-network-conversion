@@ -19,11 +19,12 @@ import (
 	"context"
 	"fmt"
 
-	log "github.com/sirupsen/logrus"
-	"google.golang.org/api/container/v1"
 	"legacymigration/pkg"
 	"legacymigration/pkg/migrate"
 	"legacymigration/pkg/operations"
+
+	log "github.com/sirupsen/logrus"
+	"google.golang.org/api/container/v1"
 )
 
 // Cluster and NodePoolOptions
@@ -96,7 +97,7 @@ func (m *clusterMigrator) Complete(ctx context.Context) error {
 		m.children[i] = m.factory(np)
 	}
 
-	log.Infof("Initialize NodePool migrators for Cluster %s", m.ClusterPath())
+	log.Infof("Initialize NodePool objects for Cluster %s", m.ClusterPath())
 	sem := make(chan struct{}, m.opts.ConcurrentNodePools)
 	return migrate.Complete(ctx, sem, m.children...)
 }
@@ -110,7 +111,7 @@ func (m *clusterMigrator) Validate(ctx context.Context) error {
 
 	log.Infof("Upgrade for Cluster %s is valid; desired: %q (%s), current: %s",
 		m.ClusterPath(), m.opts.DesiredControlPlaneVersion, m.resolvedDesiredControlPlaneVersion, m.cluster.CurrentMasterVersion)
-	log.Infof("Validate NodePool migrators for Cluster %s", m.ClusterPath())
+	log.Infof("Validate NodePool upgrade(s) for Cluster %s", m.ClusterPath())
 	sem := make(chan struct{}, m.opts.ConcurrentNodePools)
 	return migrate.Validate(ctx, sem, m.children...)
 }
