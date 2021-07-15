@@ -79,6 +79,7 @@ type ComputeService interface {
 	GetGlobalOperation(ctx context.Context, project, name string, opts ...googleapi.CallOption) (*compute.Operation, error)
 	WaitOperation(ctx context.Context, project string, op *compute.Operation, opts ...googleapi.CallOption) (*compute.Operation, error)
 	SwitchToCustomMode(ctx context.Context, project, name string, opts ...googleapi.CallOption) (*compute.Operation, error)
+	GetNetwork(ctx context.Context, project string, network string, opts ...googleapi.CallOption) (*compute.Network, error)
 	ListNetworks(ctx context.Context, project string) ([]*compute.Network, error)
 }
 
@@ -131,6 +132,10 @@ func (c *Compute) WaitOperation(ctx context.Context, project string, op *compute
 	default:
 		return c.V1.GlobalOperations.Wait(project, op.Name).Context(ctx).Do(opts...)
 	}
+}
+
+func (c *Compute) GetNetwork(ctx context.Context, project string, network string, opts ...googleapi.CallOption) (*compute.Network, error) {
+	return c.V1.Networks.Get(project, network).Context(ctx).Do(opts...)
 }
 
 func (c *Compute) ListNetworks(ctx context.Context, project string) ([]*compute.Network, error) {

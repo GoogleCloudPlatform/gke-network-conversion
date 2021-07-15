@@ -19,10 +19,11 @@ import (
 	"context"
 	"fmt"
 
+	"legacymigration/pkg"
+
 	"google.golang.org/api/compute/v1"
 	"google.golang.org/api/container/v1"
 	"google.golang.org/api/googleapi"
-	"legacymigration/pkg"
 )
 
 var (
@@ -53,6 +54,9 @@ type FakeCompute struct {
 	WaitOperationResp *compute.Operation
 	WaitOperationErr  error
 
+	GetNetworkResp *compute.Network
+	GetNetworkErr  error
+
 	ListNetworksResp []*compute.Network
 	ListNetworksErr  error
 }
@@ -72,7 +76,10 @@ func (f *FakeCompute) GetGlobalOperation(ctx context.Context, project, name stri
 func (f *FakeCompute) WaitOperation(ctx context.Context, project string, op *compute.Operation, opts ...googleapi.CallOption) (*compute.Operation, error) {
 	return f.WaitOperationResp, f.WaitOperationErr
 }
-func (f *FakeCompute) ListNetworks(ctx context.Context, project string) (networks []*compute.Network, err error) {
+func (f *FakeCompute) GetNetwork(ctx context.Context, project, network string, opts ...googleapi.CallOption) (*compute.Network, error) {
+	return f.GetNetworkResp, f.GetNetworkErr
+}
+func (f *FakeCompute) ListNetworks(ctx context.Context, project string) ([]*compute.Network, error) {
 	return f.ListNetworksResp, f.ListNetworksErr
 }
 
@@ -162,6 +169,11 @@ func DefaultFakeCompute() *FakeCompute {
 			SelfLink:      switchToCustomModeOperationSelfLink,
 		},
 		WaitOperationErr: nil,
+
+		GetNetworkResp: &compute.Network{
+			Name: SelectedNetwork,
+		},
+		GetNetworkErr: nil,
 
 		ListNetworksResp: []*compute.Network{
 			{

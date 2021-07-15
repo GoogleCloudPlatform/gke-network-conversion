@@ -20,13 +20,14 @@ import (
 	"fmt"
 	"strings"
 
-	log "github.com/sirupsen/logrus"
-	"google.golang.org/api/compute/v1"
-	"google.golang.org/api/container/v1"
 	"legacymigration/pkg"
 	"legacymigration/pkg/clusters"
 	"legacymigration/pkg/migrate"
 	"legacymigration/pkg/operations"
+
+	log "github.com/sirupsen/logrus"
+	"google.golang.org/api/compute/v1"
+	"google.golang.org/api/container/v1"
 )
 
 type networkMigrator struct {
@@ -135,6 +136,14 @@ func (m *networkMigrator) migrateNetwork(ctx context.Context) error {
 	}
 
 	log.Infof("Network %q switched to custom mode VPC network", m.network.Name)
+
+	resp, err := m.clients.Compute.GetNetwork(ctx, m.projectID, m.network.Name)
+	if err != nil {
+		return fmt.Errorf("unable to confirm network %q was converted: %w", m.network.Name, err)
+	}
+	if resp.IPv4Range != "" {
+		return fmt.Errorf("network %q was not converted; Network.IPv4Range (%s) should be empty", resp.Name, resp.IPv4Range)
+	}
 
 	return nil
 }
