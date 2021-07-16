@@ -71,14 +71,14 @@ func New(
 
 // Complete initializes this migrator instance.
 func (m *clusterMigrator) Complete(ctx context.Context) error {
-	resp, err := m.clients.Container.ListNodePools(ctx, m.ClusterPath())
+	resp, err := m.clients.Container.ListNodePools(ctx, m.ResourcePath())
 	if err != nil {
-		return fmt.Errorf("error retrieving NodePools for Cluster %s: %w", m.ClusterPath(), err)
+		return fmt.Errorf("error retrieving NodePools for Cluster %s: %w", m.ResourcePath(), err)
 	}
 	path := pkg.LocationPath(m.projectID, m.cluster.Location)
 	m.serverConfig, err = m.clients.Container.GetServerConfig(ctx, path)
 	if err != nil {
-		return fmt.Errorf("error retrieving ServerConfig for Cluster %s: %w", m.ClusterPath(), err)
+		return fmt.Errorf("error retrieving ServerConfig for Cluster %s: %w", m.ResourcePath(), err)
 	}
 
 	m.releaseChannel = getReleaseChannel(m.cluster.ReleaseChannel)
@@ -97,7 +97,7 @@ func (m *clusterMigrator) Complete(ctx context.Context) error {
 		m.children[i] = m.factory(np)
 	}
 
-	log.Infof("Initialize NodePool objects for Cluster %s", m.ClusterPath())
+	log.Infof("Initialize NodePool objects for Cluster %s", m.ResourcePath())
 	sem := make(chan struct{}, m.opts.ConcurrentNodePools)
 	return migrate.Complete(ctx, sem, m.children...)
 }
@@ -106,12 +106,12 @@ func (m *clusterMigrator) Complete(ctx context.Context) error {
 func (m *clusterMigrator) Validate(ctx context.Context) error {
 	_, valid := getVersions(m.serverConfig, m.releaseChannel, ControlPlane)
 	if err := isUpgrade(m.resolvedDesiredControlPlaneVersion, m.cluster.CurrentMasterVersion, valid, true); err != nil {
-		return fmt.Errorf("validation error for Cluster %s: %w", m.ClusterPath(), err)
+		return fmt.Errorf("validation error for Cluster %s: %w", m.ResourcePath(), err)
 	}
 
 	log.Infof("Upgrade for Cluster %s is valid; desired: %q (%s), current: %s",
-		m.ClusterPath(), m.opts.DesiredControlPlaneVersion, m.resolvedDesiredControlPlaneVersion, m.cluster.CurrentMasterVersion)
-	log.Infof("Validate NodePool upgrade(s) for Cluster %s", m.ClusterPath())
+		m.ResourcePath(), m.opts.DesiredControlPlaneVersion, m.resolvedDesiredControlPlaneVersion, m.cluster.CurrentMasterVersion)
+	log.Infof("Validate NodePool upgrade(s) for Cluster %s", m.ResourcePath())
 	sem := make(chan struct{}, m.opts.ConcurrentNodePools)
 	return migrate.Validate(ctx, sem, m.children...)
 }
@@ -127,12 +127,12 @@ func (m *clusterMigrator) Migrate(ctx context.Context) error {
 
 func (m *clusterMigrator) upgradeControlPlane(ctx context.Context) error {
 	if m.cluster.Subnetwork != "" {
-		log.Infof("Cluster %s does not require control plane upgrade.", m.ClusterPath())
+		log.Infof("Cluster %s does not require control plane upgrade.", m.ResourcePath())
 		return nil
 	}
 
 	req := &container.UpdateMasterRequest{
-		Name:          m.ClusterPath(),
+		Name:          m.ResourcePath(),
 		MasterVersion: m.resolvedDesiredControlPlaneVersion,
 	}
 
@@ -143,7 +143,7 @@ func (m *clusterMigrator) upgradeControlPlane(ctx context.Context) error {
 		original := err
 		name := pkg.OperationsPath(m.projectID, m.cluster.Location, operations.ObtainID(err))
 		if op, err = m.clients.Container.GetOperation(ctx, name); err != nil {
-			return fmt.Errorf("error upgrading control plane for Cluster %s: %w", m.ClusterPath(), original)
+			return fmt.Errorf("error upgrading control plane for Cluster %s: %w", m.ResourcePath(), original)
 		}
 	}
 
@@ -159,12 +159,12 @@ func (m *clusterMigrator) upgradeControlPlane(ctx context.Context) error {
 
 	log.Infof("Upgraded control plane for Cluster %q to version %q", req.Name, req.MasterVersion)
 
-	resp, err := m.clients.Container.GetCluster(ctx, m.ClusterPath())
+	resp, err := m.clients.Container.GetCluster(ctx, m.ResourcePath())
 	if err != nil {
-		return fmt.Errorf("unable to confirm subnetwork value for cluster %s: %w", m.ClusterPath(), err)
+		return fmt.Errorf("unable to confirm subnetwork value for cluster %s: %w", m.ResourcePath(), err)
 	}
 	if resp.Subnetwork == "" {
-		return fmt.Errorf("subnetwork field is empty for cluster %s", m.ClusterPath())
+		return fmt.Errorf("subnetwork field is empty for cluster %s", m.ResourcePath())
 	}
 
 	return nil
@@ -173,13 +173,13 @@ func (m *clusterMigrator) upgradeControlPlane(ctx context.Context) error {
 // upgradeNodePools upgrades all Nodes for a clusters.
 // This is to ensure that the instance templates for the nodes
 func (m *clusterMigrator) upgradeNodePools(ctx context.Context) error {
-	log.Infof("Initiate NodePool upgrades for Cluster %s", m.ClusterPath())
+	log.Infof("Initiate NodePool upgrades for Cluster %s", m.ResourcePath())
 	sem := make(chan struct{}, m.opts.ConcurrentNodePools)
 	return migrate.Migrate(ctx, sem, m.children...)
 }
 
-// ClusterPath formats identifying information about the cluster.
-func (m *clusterMigrator) ClusterPath() string {
+// ResourcePath formats identifying information about the cluster.
+func (m *clusterMigrator) ResourcePath() string {
 	return pkg.ClusterPath(m.projectID, m.cluster.Location, m.cluster.Name)
 }
 

@@ -37,3 +37,7 @@ func (m *FakeMigrator) Migrate(ctx context.Context) error {
 		return m.MigrateError
 	}
 }
+
+func (m *FakeMigrator) ResourcePath() string {
+	return "resource-path"
+}

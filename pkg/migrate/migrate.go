@@ -28,6 +28,7 @@ type Migrator interface {
 	Complete(ctx context.Context) error
 	Validate(ctx context.Context) error
 	Migrate(ctx context.Context) error
+	ResourcePath() string
 }
 
 type MethodType int

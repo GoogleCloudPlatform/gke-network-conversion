@@ -57,7 +57,7 @@ func (m *nodePoolMigrator) Complete(ctx context.Context) error {
 	var err error
 	m.upgradeRequired, err = m.isUpgradeRequired(ctx)
 	if err != nil {
-		return fmt.Errorf("unable to verify state for NodePool %s: %w", m.NodePoolPath(), err)
+		return fmt.Errorf("unable to verify state for NodePool %s: %w", m.ResourcePath(), err)
 	}
 
 	def, valid := getVersions(m.serverConfig, m.releaseChannel, Node)
@@ -78,7 +78,7 @@ func (m *nodePoolMigrator) Complete(ctx context.Context) error {
 // Validate ensures a NodePool upgrade is an allowed upgrade path.
 func (m *nodePoolMigrator) Validate(_ context.Context) error {
 	if !m.upgradeRequired {
-		log.Infof("State of NodePool %s is valid; does not require an upgrade.", m.NodePoolPath())
+		log.Infof("State of NodePool %s is valid; does not require an upgrade.", m.ResourcePath())
 		return nil
 	}
 	var (
@@ -101,7 +101,7 @@ func (m *nodePoolMigrator) Validate(_ context.Context) error {
 	}
 
 	log.Infof("Upgrade for NodePool %s is valid; desired: %q (%s), current: %s",
-		m.NodePoolPath(), desired, resolved, current)
+		m.ResourcePath(), desired, resolved, current)
 
 	return nil
 }
@@ -109,17 +109,17 @@ func (m *nodePoolMigrator) Validate(_ context.Context) error {
 // Migrate performs a NodePool upgrade is deemed necessary.
 func (m *nodePoolMigrator) Migrate(ctx context.Context) error {
 	if !m.upgradeRequired {
-		log.Infof("Upgrade not required for NodePool %s; skipping upgrade.", m.NodePoolPath())
+		log.Infof("Upgrade not required for NodePool %s; skipping upgrade.", m.ResourcePath())
 		return nil
 	}
 
-	log.Infof("Upgrading NodePool %s to version %q", m.NodePoolPath(), m.resolvedDesiredNodeVersion)
+	log.Infof("Upgrading NodePool %s to version %q", m.ResourcePath(), m.resolvedDesiredNodeVersion)
 
 	return m.migrate(ctx)
 }
 
 func (m *nodePoolMigrator) migrate(ctx context.Context) error {
-	npp := m.NodePoolPath()
+	npp := m.ResourcePath()
 	req := &container.UpdateNodePoolRequest{
 		Name:        npp,
 		NodeVersion: m.resolvedDesiredNodeVersion,
@@ -150,18 +150,18 @@ func (m *nodePoolMigrator) migrate(ctx context.Context) error {
 
 	required, err := m.isUpgradeRequired(ctx)
 	if err != nil {
-		return fmt.Errorf("unable to verify post-upgrade state for NodePool %s: %w", m.NodePoolPath(), err)
+		return fmt.Errorf("unable to verify post-upgrade state for NodePool %s: %w", m.ResourcePath(), err)
 	}
 	if required {
 		// This should not happen, as the cluster must first be successfully migrated.
-		return fmt.Errorf("state was not patched for NodePool %s", m.NodePoolPath())
+		return fmt.Errorf("state was not patched for NodePool %s", m.ResourcePath())
 	}
 
 	return nil
 }
 
 // ClusterPath formats identifying information about the cluster.
-func (m *nodePoolMigrator) NodePoolPath() string {
+func (m *nodePoolMigrator) ResourcePath() string {
 	return pkg.NodePoolPath(m.projectID, m.cluster.Location, m.cluster.Name, m.nodePool.Name)
 }
 
@@ -174,19 +174,19 @@ func (m *nodePoolMigrator) isUpgradeRequired(ctx context.Context) (bool, error) 
 	for _, url := range m.nodePool.InstanceGroupUrls {
 		res := instanceGroupManagerRegex.FindStringSubmatch(url)
 		if res == nil {
-			errors = multierr.Append(errors, fmt.Errorf("unable to parse location and name information from InstanceGroup URL (%s) for NodePool %s", url, m.NodePoolPath()))
+			errors = multierr.Append(errors, fmt.Errorf("unable to parse location and name information from InstanceGroup URL (%s) for NodePool %s", url, m.ResourcePath()))
 			continue
 		}
 
 		igm, err := m.clients.Compute.GetInstanceGroupManager(ctx, m.projectID, res[1], res[2])
 		if err != nil {
-			errors = multierr.Append(errors, fmt.Errorf("error retrieving InstanceGroupManagers (%s) for NodePool %s: %w", url, m.NodePoolPath(), err))
+			errors = multierr.Append(errors, fmt.Errorf("error retrieving InstanceGroupManagers (%s) for NodePool %s: %w", url, m.ResourcePath(), err))
 			continue
 		}
 
 		it, err := m.clients.Compute.GetInstanceTemplate(ctx, m.projectID, getName(igm.InstanceTemplate))
 		if err != nil {
-			errors = multierr.Append(errors, fmt.Errorf("error retrieving GetInstanceTemplateResp %s for NodePool %s: %w", igm.InstanceTemplate, m.NodePoolPath(), err))
+			errors = multierr.Append(errors, fmt.Errorf("error retrieving GetInstanceTemplateResp %s for NodePool %s: %w", igm.InstanceTemplate, m.ResourcePath(), err))
 			continue
 		}
 		missing := true
@@ -203,10 +203,10 @@ func (m *nodePoolMigrator) isUpgradeRequired(ctx context.Context) (bool, error) 
 	}
 
 	if errors != nil && !required {
-		return required, fmt.Errorf("error(s) encountered obtaining an InstanceTemplate for NodePool %s: %w", m.NodePoolPath(), errors)
+		return required, fmt.Errorf("error(s) encountered obtaining an InstanceTemplate for NodePool %s: %w", m.ResourcePath(), errors)
 	}
 	if errors != nil {
-		log.Infof("Error(s) retrieving InstanceTemplate(s) for NodePool %s: %v", m.NodePoolPath(), errors)
+		log.Infof("Error(s) retrieving InstanceTemplate(s) for NodePool %s: %v", m.ResourcePath(), errors)
 	}
 
 	return required, nil
@@ -222,5 +222,5 @@ func getName(path string) string {
 // wrap contextualizes errors during nodePoolMigrator methods
 func (m *nodePoolMigrator) wrap(err error, stage string) error {
 	//goland:noinspection ALL
-	return fmt.Errorf("NodePool %s error during %s: %w", m.NodePoolPath(), stage, err)
+	return fmt.Errorf("NodePool %s error during %s: %w", m.ResourcePath(), stage, err)
 }

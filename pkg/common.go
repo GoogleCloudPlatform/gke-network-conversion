@@ -36,10 +36,12 @@ const (
 
 	 Example: https://cloud.google.com/kubernetes-engine/docs/reference/rest/v1beta1/projects.locations.clusters/updateMaster#path-parameters
 	*/
-	locationPath  = "projects/%s/locations/%s"
+	projectPath   = "projects/%s"
+	locationPath  = projectPath + "/locations/%s"
 	clusterPath   = locationPath + "/clusters/%s"
 	nodePoolPath  = clusterPath + "/nodePools/%s"
 	operationPath = locationPath + "/operations/%s"
+	networkPath   = projectPath + "/global/networks/%s"
 
 	AnyLocation = "-"
 
@@ -70,6 +72,11 @@ func NodePoolPath(project, location, cluster, name string) string {
 // OperationPath returns a path to a project/location/operation.
 func OperationsPath(project, location, name string) string {
 	return fmt.Sprintf(operationPath, project, location, name)
+}
+
+// NetworkPath returns a path to a project/location/operation.
+func NetworkPath(project, name string) string {
+	return fmt.Sprintf(networkPath, project, name)
 }
 
 // ComputeService mirrors a (sub)set of the generated Compute Service APIs.
@@ -142,9 +149,7 @@ func (c *Compute) ListNetworks(ctx context.Context, project string) ([]*compute.
 	networks := make([]*compute.Network, 0)
 	req := c.V1.Networks.List(project)
 	err := req.Pages(ctx, func(page *compute.NetworkList) error {
-		for _, network := range page.Items {
-			networks = append(networks, network)
-		}
+		networks = append(networks, page.Items...)
 		return nil
 	})
 	return networks, err

@@ -22,17 +22,16 @@ import (
 	"strings"
 	"testing"
 
-	log "github.com/sirupsen/logrus"
 	"legacymigration/test"
+
+	log "github.com/sirupsen/logrus"
 )
 
 func TestMigrate_Run(t *testing.T) {
 	cancelled, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	select {
-	case <-cancelled.Done():
-	}
+	<-cancelled.Done()
 
 	cases := []struct {
 		desc      string

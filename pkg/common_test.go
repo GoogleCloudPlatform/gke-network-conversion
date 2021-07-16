@@ -152,3 +152,33 @@ func TestOperations(t *testing.T) {
 		})
 	}
 }
+
+func TestNetworkPath(t *testing.T) {
+	cases := []struct {
+		desc    string
+		project string
+		network string
+		want    string
+	}{
+		{
+			desc:    "Project-Network x-y",
+			project: "x",
+			network: "y",
+			want:    "projects/x/global/networks/y",
+		},
+		{
+			desc:    "Project-Network a-b",
+			project: "a",
+			network: "b",
+			want:    "projects/a/global/networks/b",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			got := NetworkPath(tc.project, tc.network)
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Fatalf("NetworkPath diff:\n%s", diff)
+			}
+		})
+	}
+}

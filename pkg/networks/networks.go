@@ -61,6 +61,11 @@ func New(
 	}
 }
 
+// ResourcePath returns the resource path for this migrator.
+func (m *networkMigrator) ResourcePath() string {
+	return pkg.NetworkPath(m.projectID, m.network.Name)
+}
+
 // Complete finishes initializing the networkMigrator.
 func (m *networkMigrator) Complete(ctx context.Context) error {
 	path := pkg.LocationPath(m.projectID, pkg.AnyLocation)
