@@ -280,3 +280,67 @@ func TestObtainID(t *testing.T) {
 		})
 	}
 }
+
+func TestWaitIfOperationInProgress(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		desc    string
+		results []error
+		wait    func(ctx context.Context, op string) error
+		want    string
+	}{
+		{
+			desc:    "Success",
+			results: []error{nil},
+		},
+		{
+			desc:    "Success after wait",
+			results: []error{test.ErrorInProgress, nil},
+			wait:    func(ctx context.Context, op string) error { return nil },
+		},
+		{
+			desc:    "Not ongoing operation",
+			results: []error{errors.New("unrecoverable error during call")},
+			wait:    func(ctx context.Context, op string) error { return nil },
+			want:    "unrecoverable error during call",
+		},
+		{
+			desc:    "Error during wait",
+			results: []error{test.ErrorInProgress},
+			wait:    func(ctx context.Context, op string) error { return errors.New("unrecoverable error during wait") },
+			want:    "unrecoverable error during wait",
+		},
+		{
+			desc:    "Error on retry",
+			results: []error{test.ErrorInProgress, errors.New("unrecoverable error during second call")},
+			wait:    func(ctx context.Context, op string) error { return nil },
+			want:    "unrecoverable error during second call",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			// Function f returns
+			index := 0
+			f := func(ctx context.Context) error {
+				if len(tc.results) == 0 {
+					t.Fatalf("Test error: must provide at least one result value")
+				}
+				defer func() {
+					index = min(index+1, len(tc.results)-1)
+				}()
+				return tc.results[index]
+			}
+			err := WaitForOperationInProgress(context.Background(), f, tc.wait)
+			if diff := test.ErrorDiff(tc.want, err); diff != "" {
+				t.Errorf("HandlerImpl.Wait diff (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}

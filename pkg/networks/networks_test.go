@@ -189,20 +189,27 @@ func TestNetworkMigrator_Migrate(t *testing.T) {
 			m: testNetworkMigrator(
 				legacyNetwork,
 				func(clients *pkg.Clients) *pkg.Clients {
-					clients.Compute.(*test.FakeCompute).SwitchToCustomModeErr = errors.New("not allowlisted")
+					clients.Compute.(*test.FakeCompute).SwitchToCustomModeErrs = []error{errors.New("unknown error")}
 					clients.Compute.(*test.FakeCompute).GetGlobalOperationErr = errors.New("not found")
 					return clients
 				}(test.DefaultClients()),
 			),
-			wantErr: "not allowlisted",
+			wantErr: "error switching legacy network projects/test-project/global/networks/network-0 to custom mode VPC network: unknown error",
 		},
 		{
-			desc: "SwitchToCustomMode in progress",
+			desc: "Operation in progress",
 			ctx:  ctx,
 			m: testNetworkMigrator(
 				legacyNetwork,
 				func(clients *pkg.Clients) *pkg.Clients {
-					clients.Compute.(*test.FakeCompute).SwitchToCustomModeErr = errors.New("operation: operation-abc-123 already in progress")
+					clients.Compute.(*test.FakeCompute).SwitchToCustomModeResps = []*compute.Operation{
+						nil,
+						{Status: test.OperationDone},
+					}
+					clients.Compute.(*test.FakeCompute).SwitchToCustomModeErrs = []error{
+						test.ErrorInProgress,
+						nil,
+					}
 					return clients
 				}(test.DefaultClients()),
 			),
@@ -249,7 +256,7 @@ func TestNetworkMigrator_Migrate(t *testing.T) {
 					return clients
 				}(test.DefaultClients()),
 			),
-			wantErr: `unable to confirm network "network-0" was converted: get error`,
+			wantErr: `unable to confirm network projects/test-project/global/networks/network-0 was converted: get error`,
 		},
 		{
 			desc: "Network not converted",
@@ -261,7 +268,7 @@ func TestNetworkMigrator_Migrate(t *testing.T) {
 					return clients
 				}(test.DefaultClients()),
 			),
-			wantErr: `network "network-0" was not converted; Network.IPv4Range (10.20.0.0/16) should be empty`,
+			wantErr: `network projects/test-project/global/networks/network-0 was not converted; Network.IPv4Range (10.20.0.0/16) should be empty`,
 		},
 		{
 			desc:    "Context cancelled",
