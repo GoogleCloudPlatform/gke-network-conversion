@@ -15,7 +15,10 @@ limitations under the License.
 */
 package test
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 const (
 	ProjectName                     = "test-project"
@@ -47,4 +50,6 @@ var (
 	InstanceGroupManagerZoneA0  = SelfLink(ComputeAPI, fmt.Sprintf("projects/%s/zones/%s/instanceGroupManagers/%s", ProjectName, ZoneA0, InstanceGroupManagerName))
 	InstanceGroupManagerZoneA1  = SelfLink(ComputeAPI, fmt.Sprintf("projects/%s/zones/%s/instanceGroupManagers/%s", ProjectName, ZoneA1, InstanceGroupManagerName))
 	InstanceGroupManagerRegionA = SelfLink(ComputeAPI, fmt.Sprintf("projects/%s/regions/%s/instanceGroupManagers/%s", ProjectName, RegionA, InstanceGroupManagerName))
+
+	ErrorInProgress = errors.New("Operation operation-asdf-asdf is currently doing something")
 )

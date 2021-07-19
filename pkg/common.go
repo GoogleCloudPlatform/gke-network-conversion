@@ -74,7 +74,7 @@ func OperationsPath(project, location, name string) string {
 	return fmt.Sprintf(operationPath, project, location, name)
 }
 
-// NetworkPath returns a path to a project/location/operation.
+// NetworkPath returns a path to a project/global/network.
 func NetworkPath(project, name string) string {
 	return fmt.Sprintf(networkPath, project, name)
 }

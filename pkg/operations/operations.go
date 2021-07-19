@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -106,4 +107,31 @@ func IsFinished(ctx context.Context, poll func(ctx context.Context) (OperationSt
 		return true, errors.New(status.Error)
 	}
 	return true, nil
+}
+
+// WaitForOperationInProgress will attempt a retry of the function.
+func WaitForOperationInProgress(ctx context.Context, f func(ctx context.Context) error, wait func(ctx context.Context, op string) error) error {
+	err := f(ctx)
+	if err == nil {
+		return nil
+	}
+
+	op := ObtainID(err)
+	if op == "" {
+		return err
+	}
+	if !strings.Contains(err.Error(), fmt.Sprintf("Operation %s is currently", op)) {
+		// Match format of errors returned by the GKE API.
+		return err
+	}
+
+	log.Infof("Operation %s is in progress; wait for operation to complete: %v", op, err)
+
+	if err := wait(ctx, op); err != nil {
+		return err
+	}
+
+	log.Infof("Operation %s is complete; retrying. Retry due to: %v", op, err)
+
+	return f(ctx)
 }

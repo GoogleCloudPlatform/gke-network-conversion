@@ -71,7 +71,7 @@ func (m *networkMigrator) Complete(ctx context.Context) error {
 	path := pkg.LocationPath(m.projectID, pkg.AnyLocation)
 	resp, err := m.clients.Container.ListClusters(ctx, path)
 	if err != nil {
-		return fmt.Errorf("error listing Clusters: %w", err)
+		return fmt.Errorf("error listing Clusters for network %s: %w", m.ResourcePath(), err)
 	}
 
 	if len(resp.MissingZones) > 0 {
@@ -90,6 +90,12 @@ func (m *networkMigrator) Complete(ctx context.Context) error {
 		m.children[i] = m.factory(c)
 	}
 
+	// API returns error if no GCE resource with an internal IP (e.g. Cluster) is present on the Network:
+	//  "No internal IP resources on the Network. This network does not need to be migrated."
+	if len(m.children) == 0 {
+		log.Warnf("Network %s contains no clusters.", m.ResourcePath())
+	}
+
 	sem := make(chan struct{}, m.concurrentClusters)
 	return migrate.Complete(ctx, sem, m.children...)
 }
@@ -102,13 +108,7 @@ func (m *networkMigrator) Validate(ctx context.Context) error {
 
 // Migrate performs the network migration and then the cluster upgrades.
 func (m *networkMigrator) Migrate(ctx context.Context) error {
-	// API returns error if no GCE resource with an internal IP (e.g. Cluster) is present on the Network:
-	//  "No internal IP resources on the Network. This network does not need to be migrated."
-	if len(m.children) == 0 {
-		log.Warnf("Network %q contains no clusters.", m.network.Name)
-	}
-
-	if err := m.migrateNetwork(ctx); err != nil {
+	if err := operations.WaitForOperationInProgress(ctx, m.migrateNetwork, m.wait); err != nil {
 		return err
 	}
 
@@ -116,18 +116,16 @@ func (m *networkMigrator) Migrate(ctx context.Context) error {
 }
 
 func (m *networkMigrator) migrateNetwork(ctx context.Context) error {
+	path := m.ResourcePath()
 	if m.network.IPv4Range == "" {
-		log.Infof("Network %q is already a VPC network.", m.network.Name)
+		log.Infof("Network %s is already a VPC network.", path)
 		return nil
 	}
 
-	log.Infof("Switching legacy network %q to custom mode VPC network", m.network.Name)
+	log.Infof("Switching legacy network %s to custom mode VPC network", path)
 	op, err := m.clients.Compute.SwitchToCustomMode(ctx, m.projectID, m.network.Name)
 	if err != nil {
-		original := err
-		if op, err = m.clients.Compute.GetGlobalOperation(ctx, m.projectID, operations.ObtainID(err)); err != nil {
-			return fmt.Errorf("error switching legacy network %q to custom mode VPC network: %w", m.network.Name, original)
-		}
+		return fmt.Errorf("error switching legacy network %s to custom mode VPC network: %w", path, err)
 	}
 
 	w := &ComputeOperation{
@@ -140,14 +138,14 @@ func (m *networkMigrator) migrateNetwork(ctx context.Context) error {
 		return fmt.Errorf("error waiting on Operation %s: %w", path, err)
 	}
 
-	log.Infof("Network %q switched to custom mode VPC network", m.network.Name)
+	log.Infof("Network %s switched to custom mode VPC network", path)
 
 	resp, err := m.clients.Compute.GetNetwork(ctx, m.projectID, m.network.Name)
 	if err != nil {
-		return fmt.Errorf("unable to confirm network %q was converted: %w", m.network.Name, err)
+		return fmt.Errorf("unable to confirm network %s was converted: %w", path, err)
 	}
 	if resp.IPv4Range != "" {
-		return fmt.Errorf("network %q was not converted; Network.IPv4Range (%s) should be empty", resp.Name, resp.IPv4Range)
+		return fmt.Errorf("network %s was not converted; Network.IPv4Range (%s) should be empty", path, resp.IPv4Range)
 	}
 
 	return nil
@@ -157,6 +155,23 @@ func (m *networkMigrator) migrateClusters(ctx context.Context) error {
 	log.Infof("Initiate upgrades for cluster(s) on network %q", m.network.Name)
 	sem := make(chan struct{}, m.concurrentClusters)
 	return migrate.Migrate(ctx, sem, m.children...)
+}
+
+func (m *networkMigrator) wait(ctx context.Context, opID string) error {
+	op, err := m.clients.Compute.GetGlobalOperation(ctx, m.projectID, opID)
+	if err != nil {
+		return err
+	}
+
+	w := &ComputeOperation{
+		ProjectID: m.projectID,
+		Operation: op,
+		Client:    m.clients.Compute,
+	}
+	if err := m.handler.Wait(ctx, w); err != nil {
+		return fmt.Errorf("error waiting on ongoing operation %s: %w", w.String(), err)
+	}
+	return nil
 }
 
 type ComputeOperation struct {

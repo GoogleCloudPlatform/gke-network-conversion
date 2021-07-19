@@ -45,8 +45,8 @@ type FakeCompute struct {
 	GetInstanceTemplateResp *compute.InstanceTemplate
 	GetInstanceTemplateErr  error
 
-	SwitchToCustomModeResp *compute.Operation
-	SwitchToCustomModeErr  error
+	SwitchToCustomModeResps []*compute.Operation
+	SwitchToCustomModeErrs  []error
 
 	GetGlobalOperationResp *compute.Operation
 	GetGlobalOperationErr  error
@@ -67,8 +67,11 @@ func (f *FakeCompute) GetInstanceGroupManager(ctx context.Context, project, zone
 func (f *FakeCompute) GetInstanceTemplate(ctx context.Context, project, instanceTemplate string, opts ...googleapi.CallOption) (*compute.InstanceTemplate, error) {
 	return f.GetInstanceTemplateResp, f.GetInstanceTemplateErr
 }
-func (f *FakeCompute) SwitchToCustomMode(ctx context.Context, project, name string, opts ...googleapi.CallOption) (*compute.Operation, error) {
-	return f.SwitchToCustomModeResp, f.SwitchToCustomModeErr
+func (f *FakeCompute) SwitchToCustomMode(ctx context.Context, project, name string, opts ...googleapi.CallOption) (resp *compute.Operation, err error) {
+	i := min(len(f.SwitchToCustomModeResps)-1, 1)
+	resp, f.SwitchToCustomModeResps = f.SwitchToCustomModeResps[0], f.SwitchToCustomModeResps[i:]
+	err, f.SwitchToCustomModeErrs = f.SwitchToCustomModeErrs[0], f.SwitchToCustomModeErrs[i:]
+	return
 }
 func (f *FakeCompute) GetGlobalOperation(ctx context.Context, project, name string, opts ...googleapi.CallOption) (*compute.Operation, error) {
 	return f.GetGlobalOperationResp, f.GetGlobalOperationErr
@@ -146,13 +149,15 @@ func DefaultFakeCompute() *FakeCompute {
 		},
 		GetInstanceTemplateErr: nil,
 
-		SwitchToCustomModeResp: &compute.Operation{
-			Name:          SwitchToCustomModeOperationName,
-			Status:        OperationDone,
-			StatusMessage: "",
-			SelfLink:      switchToCustomModeOperationSelfLink,
+		SwitchToCustomModeResps: []*compute.Operation{
+			{
+				Name:          SwitchToCustomModeOperationName,
+				Status:        OperationDone,
+				StatusMessage: "",
+				SelfLink:      switchToCustomModeOperationSelfLink,
+			},
 		},
-		SwitchToCustomModeErr: nil,
+		SwitchToCustomModeErrs: []error{nil},
 
 		GetGlobalOperationResp: &compute.Operation{
 			Name:          SwitchToCustomModeOperationName,
@@ -287,4 +292,11 @@ func DefaultClients() *pkg.Clients {
 		Compute:   DefaultFakeCompute(),
 		Container: DefaultFakeContainer(),
 	}
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
