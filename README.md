@@ -1,48 +1,92 @@
-# Legacy Network Migrator
+# Legacy Network Conversion Tool for GKE
 
-This repo contains a single script which facilitates migrating legacy networks to
-VPC networks and performing necessary GKE control plane and node pool upgrades.
+Legacy networks are deprecated and are no longer recommended. You can convert a
+legacy network to a VPC network using the [Single-region conversion tool]. If your
+legacy network contains Google Kubernetes Engine clusters, the cluster and node
+pools must be upgraded. The upgrade ensures that all components operate correctly
+after the conversion.
 
-For more information on VPC and legacy networks, see
-https://cloud.google.com/vpc/docs/vpc and https://cloud.google.com/vpc/docs/legacy,
-respectively.
+This repository contains a single script which converts legacy networks to VPC
+networks and performs the necessary GKE control plane and node pool upgrades.
+
+For more information on VPC and legacy networks, see [VPC network overview] and [Legacy networks], respectively.
+
+[VPC network overview]: https://cloud.google.com/vpc/docs/vpc
+[Legacy networks]: https://cloud.google.com/vpc/docs/legacy
+
+## Preparation
+
+Read [Single-region conversion tool] to understand what changes are made in your
+legacy network during conversion. Read [Converting a single region legacy network
+to a VPC network] to understand the requirements and limitations of the single-region
+conversion tool.
+
+Read [Standard cluster upgrades] and [Manually upgrading a
+cluster or node pool] to understand the process, limitations, and implications of performing cluster upgrades.
+
+[Single-region conversion tool]: https://cloud.google.com/vpc/docs/legacy#single-region-conversion
+[Converting a single region legacy network to a VPC network]: https://cloud.google.com/vpc/docs/using-legacy#convert
+[Standard cluster upgrades]: https://cloud.google.com/kubernetes-engine/docs/concepts/cluster-upgrades
+[Manually upgrading a cluster or node pool]: https://cloud.google.com/kubernetes-engine/docs/how-to/upgrading-a-cluster
 
 ## Setup
 
 The script uses Application Default Credentials for authentication.
-If not already done, install the gcloud CLI from https://cloud.google.com/sdk/ and
+If not already done, install the gcloud CLI from <https://cloud.google.com/sdk/> and
 run `gcloud auth application-default login`.
 
-For more information, see
-https://developers.google.com/identity/protocols/application-default-credentials.
+For more information, see [Authenticating as a service account]
+
+To get started, clone this repo and build the binary:
+
+```shell
+git clone https://github.com/GoogleCloudPlatform/legacy-network-migration && cd $(basename $_ .git)
+make all
+```
+
+[Authenticating as a service account]: https://cloud.google.com/docs/authentication/production
 
 ## Execution
 
-Warning: It is recommended that the migration tool be run within a maintenance window.
-For more information, see
-https://cloud.google.com/kubernetes-engine/docs/concepts/maintenance-windows-and-exclusions.
+Warning: We recommend that you run the conversion tool within a maintenance window.
+For more information, see [Maintenance windows and exclusions].
 
-The script takes the name of a network as input and validates that
-all underlying resources of the network can be upgraded. If validation fails for
-any underlying resource, no resource - including the network - will be upgraded.
+The script takes the following input: the name of a network to convert and the control plane and
+node versions that you want to upgrade to. The script validates that all underlying resources of
+the network should and can be upgraded. If validation fails for any underlying resource, no
+resource - including the network - is modified.
 
 For the full list of script arguments and options, use the `--help` flag.
 
-Please review any execution errors before re-attempting migration to ensure any
-reported errors are transient.
+Example script execution:
 
-The script is idempotent and forgoes any operation that is unnecessary to achieve
-the desired state of the resources (i.e. network, control plane and node pools).
-This allows the script to be executed without modifying arguments or flags to
-re-attempt the migration if a resource upgrade were to fail.
+```shell
+gkeconvert                                        \
+ --project=<PROJECT_ID>                          \
+ --network=<NETWORK_NAME>                        \
+ --control-plane-version=<CONTROL_PLANE_VERSION> \
+ --node-version=<NODE_VERSION>                   \
+ --validate-only=false
+```
 
-For example, the script may be run against a network which has already been migrated.
-The network upgrade will be skipped, and the script will proceed to upgrade the
-cluster(s).
+Review any execution errors before you attempt to convert the network again to ensure
+that any reported errors are transient. For errors during the network conversion, see
+[Troubleshooting a single-region conversion].
+
+The script skips any operation that is unnecessary to ensure that the GKE resources (control
+plane and node pools) are compatible with the VPC network. This allows the script to be
+executed without modifying arguments or flags to reattempt the conversion if a resource
+upgrade fails.
+
+For example, the script can be run against a network which has already been converted.
+The network upgrade is skipped, and the script proceeds to upgrade the cluster(s).
+
+[Troubleshooting a single-region conversion]: https://cloud.google.com/vpc/docs/using-legacy#troubleshooting
+[Maintenance windows and exclusions]: https://cloud.google.com/kubernetes-engine/docs/concepts/maintenance-windows-and-exclusions
 
 ## Cluster upgrade options
 
-Note: The script does not allow for downgrading the control plane nor node pool.
+Note: The script does not allow for downgrading a control plane, or a node pool version.
 
 The options for the desired control plane and node pool versions accept version
 aliases. See [cluster.UpdateMaster] and [nodePools.Update] for syntax and behavior.
@@ -52,13 +96,18 @@ aliases. See [cluster.UpdateMaster] and [nodePools.Update] for syntax and behavi
 
 ## Node pools
 
-The time required to upgrade a Node pool is a function of the number of nodes and
-may take a long time. An option is available to kick off the node pool upgrade and
-continue the script execution.
+The time required to upgrade a node pool is a function of the number of nodes and
+the values for the [surge upgrade parameters], and [Pod disruption budgets]. Ensure these
+values are tuned to balance application availability against node pool upgrade times. For
+more information, see [Determining your optimal surge configuration].
 
-As the script does not allow node pools to be downgraded, any node pool that is
-running the latest node version will cause the validation to fail (node pools may
-not be upgraded in-place).
+Node pools cannot be upgraded in-place (desired version matches the current version).
+Any node pool which requires an upgrade and is running the latest node version causes
+the validation to fail because there is no version to upgrade the node pools to.
+
+[surge upgrade parameters]: https://cloud.google.com/kubernetes-engine/docs/how-to/upgrading-a-cluster#surge
+[Pod disruption budgets]: https://kubernetes.io/docs/tasks/run-application/configure-pdb/
+[Determining your optimal surge configuration]: https://cloud.google.com/kubernetes-engine/docs/concepts/cluster-upgrades#optimizing-surge
 
 ## Contributing
 
