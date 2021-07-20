@@ -26,6 +26,12 @@ import (
 	"syscall"
 	"time"
 
+	"legacymigration/pkg"
+	"legacymigration/pkg/clusters"
+	"legacymigration/pkg/migrate"
+	"legacymigration/pkg/networks"
+	"legacymigration/pkg/operations"
+
 	"github.com/hashicorp/go-retryablehttp"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -34,11 +40,6 @@ import (
 	"google.golang.org/api/compute/v1"
 	"google.golang.org/api/container/v1"
 	"google.golang.org/api/option"
-	"legacymigration/pkg"
-	"legacymigration/pkg/clusters"
-	"legacymigration/pkg/migrate"
-	"legacymigration/pkg/networks"
-	"legacymigration/pkg/operations"
 )
 
 const (
@@ -118,8 +119,8 @@ the clusters are compatible with a VPC network.`,
 	flags.Uint16VarP(&o.concurrentClusters, concurrentClustersFlag, "C", 1, "Number of clusters per network to upgrade concurrently.")
 
 	// Polling options.
-	flags.DurationVar(&o.pollingInterval, pollingIntervalFlag, 10*time.Second, "Period between polling attempts.")
-	flags.DurationVar(&o.pollingDeadline, pollingDeadlineFlag, 1*time.Hour, "Deadline for a long running operation to complete (e.g. to upgrade the cluster control plane).")
+	flags.DurationVar(&o.pollingInterval, pollingIntervalFlag, 15*time.Second, "Period between polling attempts.")
+	flags.DurationVar(&o.pollingDeadline, pollingDeadlineFlag, 24*time.Hour, "Deadline for a long running operation to complete (e.g. to upgrade a cluster node pool).")
 
 	// Cluster upgrade options.
 	flags.StringVar(&o.desiredControlPlaneVersion, desiredControlPlaneVersionFlag, o.desiredControlPlaneVersion,
