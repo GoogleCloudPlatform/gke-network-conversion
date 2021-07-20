@@ -21,16 +21,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
-	"google.golang.org/api/container/v1"
 	"legacymigration/pkg"
 	"legacymigration/pkg/migrate"
 	"legacymigration/pkg/operations"
 	"legacymigration/test"
+
+	"github.com/google/go-cmp/cmp"
+	"google.golang.org/api/container/v1"
 )
 
 var (
-	testHandler = operations.NewHandler(1*time.Microsecond, 1*time.Millisecond)
+	testHandler = operations.NewHandler(1*time.Microsecond, 1*time.Second)
 	testOptions = &Options{
 		ConcurrentNodePools:        1,
 		DesiredControlPlaneVersion: DefaultVersion,
@@ -213,7 +214,14 @@ func TestClusterMigrator_Migrate(t *testing.T) {
 				&c,
 				testOptions,
 				func(clients *pkg.Clients) *pkg.Clients {
-					clients.Container.(*test.FakeContainer).UpdateMasterErr = errors.New("operation operation-update-master already in progress")
+					clients.Container.(*test.FakeContainer).UpdateMasterResps = []*container.Operation{
+						nil,
+						{Status: test.OperationDone},
+					}
+					clients.Container.(*test.FakeContainer).UpdateMasterErrs = []error{
+						test.ErrorInProgress,
+						nil,
+					}
 					return clients
 				}(test.DefaultClients())),
 		},
@@ -224,8 +232,8 @@ func TestClusterMigrator_Migrate(t *testing.T) {
 				&c,
 				testOptions,
 				func(clients *pkg.Clients) *pkg.Clients {
-					clients.Container.(*test.FakeContainer).UpdateMasterErr = errors.New("unrecoverable error")
-					clients.Container.(*test.FakeContainer).GetOperationErr = errors.New("not found")
+					clients.Container.(*test.FakeContainer).UpdateMasterErrs = []error{errors.New("unrecoverable error")}
+					clients.Container.(*test.FakeContainer).GetOperationErrs = []error{errors.New("not found")}
 					return clients
 				}(test.DefaultClients())),
 			wantErr: "error upgrading control plane for Cluster",
@@ -261,7 +269,7 @@ func TestClusterMigrator_Migrate(t *testing.T) {
 				&c,
 				testOptions,
 				func(clients *pkg.Clients) *pkg.Clients {
-					clients.Container.(*test.FakeContainer).GetOperationErr = errors.New("operation get failed")
+					clients.Container.(*test.FakeContainer).GetOperationErrs = []error{errors.New("operation get failed")}
 					return clients
 				}(test.DefaultClients())),
 			wantErr: "error retrieving Operation projects/test-project/locations/region-a/operations/operation-update-master: operation get failed",
@@ -273,10 +281,12 @@ func TestClusterMigrator_Migrate(t *testing.T) {
 				&c,
 				testOptions,
 				func(clients *pkg.Clients) *pkg.Clients {
-					clients.Container.(*test.FakeContainer).GetOperationResp = &container.Operation{
-						Name:   "op",
-						Status: test.OperationDone,
-						Error:  &container.Status{Message: "operation failed"},
+					clients.Container.(*test.FakeContainer).GetOperationResps = []*container.Operation{
+						{
+							Name:   "op",
+							Status: test.OperationDone,
+							Error:  &container.Status{Message: "operation failed"},
+						},
 					}
 					return clients
 				}(test.DefaultClients())),

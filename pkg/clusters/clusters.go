@@ -118,7 +118,7 @@ func (m *clusterMigrator) Validate(ctx context.Context) error {
 
 // Migrate performs upgrade on the Cluster
 func (m *clusterMigrator) Migrate(ctx context.Context) error {
-	if err := m.upgradeControlPlane(ctx); err != nil {
+	if err := operations.WaitForOperationInProgress(ctx, m.upgradeControlPlane, m.wait); err != nil {
 		return err
 	}
 
@@ -140,11 +140,7 @@ func (m *clusterMigrator) upgradeControlPlane(ctx context.Context) error {
 
 	op, err := m.clients.Container.UpdateMaster(ctx, req)
 	if err != nil {
-		original := err
-		name := pkg.OperationsPath(m.projectID, m.cluster.Location, operations.ObtainID(err))
-		if op, err = m.clients.Container.GetOperation(ctx, name); err != nil {
-			return fmt.Errorf("error upgrading control plane for Cluster %s: %w", m.ResourcePath(), original)
-		}
+		return fmt.Errorf("error upgrading control plane for Cluster %s: %w", m.ResourcePath(), err)
 	}
 
 	path := pkg.PathRegex.FindString(op.SelfLink)
@@ -181,6 +177,25 @@ func (m *clusterMigrator) upgradeNodePools(ctx context.Context) error {
 // ResourcePath formats identifying information about the cluster.
 func (m *clusterMigrator) ResourcePath() string {
 	return pkg.ClusterPath(m.projectID, m.cluster.Location, m.cluster.Name)
+}
+
+func (m *clusterMigrator) wait(ctx context.Context, opID string) error {
+	name := pkg.OperationsPath(m.projectID, m.cluster.Location, opID)
+	op, err := m.clients.Container.GetOperation(ctx, name)
+	if err != nil {
+		return err
+	}
+	opPath := pkg.PathRegex.FindString(op.SelfLink)
+
+	w := &ContainerOperation{
+		ProjectID: m.projectID,
+		Path:      opPath,
+		Client:    m.clients.Container,
+	}
+	if err := m.handler.Wait(ctx, w); err != nil {
+		return fmt.Errorf("error waiting on ongoing operation %s: %w", name, err)
+	}
+	return nil
 }
 
 type ContainerOperation struct {
