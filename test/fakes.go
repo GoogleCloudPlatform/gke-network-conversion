@@ -87,8 +87,8 @@ func (f *FakeCompute) ListNetworks(ctx context.Context, project string) ([]*comp
 }
 
 type FakeContainer struct {
-	UpdateMasterResp *container.Operation
-	UpdateMasterErr  error
+	UpdateMasterResps []*container.Operation
+	UpdateMasterErrs  []error
 
 	GetClusterResp *container.Cluster
 	GetClusterErr  error
@@ -96,11 +96,11 @@ type FakeContainer struct {
 	ListClustersResp *container.ListClustersResponse
 	ListClustersErr  error
 
-	GetOperationResp *container.Operation
-	GetOperationErr  error
+	GetOperationResps []*container.Operation
+	GetOperationErrs  []error
 
-	UpdateNodePoolResp *container.Operation
-	UpdateNodePoolErr  error
+	UpdateNodePoolResps []*container.Operation
+	UpdateNodePoolErrs  []error
 
 	ListNodePoolsResp *container.ListNodePoolsResponse
 	ListNodePoolsErr  error
@@ -109,8 +109,11 @@ type FakeContainer struct {
 	GetServerConfigErr  error
 }
 
-func (f *FakeContainer) UpdateMaster(ctx context.Context, req *container.UpdateMasterRequest, opts ...googleapi.CallOption) (*container.Operation, error) {
-	return f.UpdateMasterResp, f.UpdateMasterErr
+func (f *FakeContainer) UpdateMaster(ctx context.Context, req *container.UpdateMasterRequest, opts ...googleapi.CallOption) (resp *container.Operation, err error) {
+	i := min(len(f.UpdateMasterResps)-1, 1)
+	resp, f.UpdateMasterResps = f.UpdateMasterResps[0], f.UpdateMasterResps[i:]
+	err, f.UpdateMasterErrs = f.UpdateMasterErrs[0], f.UpdateMasterErrs[i:]
+	return
 }
 func (f *FakeContainer) GetCluster(ctx context.Context, name string, opts ...googleapi.CallOption) (*container.Cluster, error) {
 	return f.GetClusterResp, f.GetClusterErr
@@ -118,11 +121,17 @@ func (f *FakeContainer) GetCluster(ctx context.Context, name string, opts ...goo
 func (f *FakeContainer) ListClusters(ctx context.Context, parent string, opts ...googleapi.CallOption) (*container.ListClustersResponse, error) {
 	return f.ListClustersResp, f.ListClustersErr
 }
-func (f *FakeContainer) GetOperation(ctx context.Context, name string, opts ...googleapi.CallOption) (*container.Operation, error) {
-	return f.GetOperationResp, f.GetOperationErr
+func (f *FakeContainer) GetOperation(ctx context.Context, name string, opts ...googleapi.CallOption) (resp *container.Operation, err error) {
+	i := min(len(f.GetOperationResps)-1, 1)
+	resp, f.GetOperationResps = f.GetOperationResps[0], f.GetOperationResps[i:]
+	err, f.GetOperationErrs = f.GetOperationErrs[0], f.GetOperationErrs[i:]
+	return
 }
-func (f *FakeContainer) UpdateNodePool(ctx context.Context, req *container.UpdateNodePoolRequest, opts ...googleapi.CallOption) (*container.Operation, error) {
-	return f.UpdateNodePoolResp, f.UpdateNodePoolErr
+func (f *FakeContainer) UpdateNodePool(ctx context.Context, req *container.UpdateNodePoolRequest, opts ...googleapi.CallOption) (resp *container.Operation, err error) {
+	i := min(len(f.UpdateNodePoolResps)-1, 1)
+	resp, f.UpdateNodePoolResps = f.UpdateNodePoolResps[0], f.UpdateNodePoolResps[i:]
+	err, f.UpdateNodePoolErrs = f.UpdateNodePoolErrs[0], f.UpdateNodePoolErrs[i:]
+	return
 }
 func (f *FakeContainer) ListNodePools(ctx context.Context, name string, opts ...googleapi.CallOption) (*container.ListNodePoolsResponse, error) {
 	return f.ListNodePoolsResp, f.ListNodePoolsErr
@@ -194,14 +203,16 @@ func DefaultFakeContainer() *FakeContainer {
 	c.Subnetwork = "subnet"
 
 	return &FakeContainer{
-		UpdateMasterResp: &container.Operation{
-			Name:          UpdateMasterOperationName,
-			Location:      RegionA,
-			Status:        OperationDone,
-			StatusMessage: "",
-			SelfLink:      SelfLink(ContainerAPI, pkg.OperationsPath(ProjectName, RegionA, UpdateMasterOperationName)),
+		UpdateMasterResps: []*container.Operation{
+			{
+				Name:          UpdateMasterOperationName,
+				Location:      RegionA,
+				Status:        OperationDone,
+				StatusMessage: "",
+				SelfLink:      SelfLink(ContainerAPI, pkg.OperationsPath(ProjectName, RegionA, UpdateMasterOperationName)),
+			},
 		},
-		UpdateMasterErr: nil,
+		UpdateMasterErrs: []error{nil},
 
 		GetClusterResp: &c,
 		GetClusterErr:  nil,
@@ -211,23 +222,27 @@ func DefaultFakeContainer() *FakeContainer {
 		},
 		ListClustersErr: nil,
 
-		GetOperationResp: &container.Operation{
-			Name:          GenericOperationName,
-			Location:      RegionA,
-			Status:        OperationDone,
-			StatusMessage: "",
-			SelfLink:      SelfLink(ContainerAPI, pkg.OperationsPath(ProjectName, RegionA, GenericOperationName)),
+		GetOperationResps: []*container.Operation{
+			{
+				Name:          GenericOperationName,
+				Location:      RegionA,
+				Status:        OperationDone,
+				StatusMessage: "",
+				SelfLink:      SelfLink(ContainerAPI, pkg.OperationsPath(ProjectName, RegionA, GenericOperationName)),
+			},
 		},
-		GetOperationErr: nil,
+		GetOperationErrs: []error{nil},
 
-		UpdateNodePoolResp: &container.Operation{
-			Name:          UpdateNodePoolOperationName,
-			Location:      RegionA,
-			Status:        OperationDone,
-			StatusMessage: "",
-			SelfLink:      SelfLink(ContainerAPI, pkg.OperationsPath(ProjectName, RegionA, UpdateNodePoolOperationName)),
+		UpdateNodePoolResps: []*container.Operation{
+			{
+				Name:          UpdateNodePoolOperationName,
+				Location:      RegionA,
+				Status:        OperationDone,
+				StatusMessage: "",
+				SelfLink:      SelfLink(ContainerAPI, pkg.OperationsPath(ProjectName, RegionA, UpdateNodePoolOperationName)),
+			},
 		},
-		UpdateNodePoolErr: nil,
+		UpdateNodePoolErrs: []error{nil},
 
 		ListNodePoolsResp: &container.ListNodePoolsResponse{
 			NodePools: []*container.NodePool{

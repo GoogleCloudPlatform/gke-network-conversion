@@ -227,16 +227,23 @@ func TestNodePoolMigrator_Migrate(t *testing.T) {
 		{
 			desc: "UpdateNodePool error",
 			clients: func(clients *pkg.Clients) *pkg.Clients {
-				clients.Container.(*test.FakeContainer).UpdateNodePoolErr = errors.New("unrecoverable error")
-				clients.Container.(*test.FakeContainer).GetOperationErr = errors.New("not found")
+				clients.Container.(*test.FakeContainer).UpdateNodePoolErrs = []error{errors.New("unrecoverable error")}
+				clients.Container.(*test.FakeContainer).GetOperationErrs = []error{errors.New("not found")}
 				return clients
 			}(test.DefaultClients()),
-			wantErr: "error upgrading NodePool",
+			wantErr: "error upgrading NodePool projects/test-project/locations/region-a/clusters/cluster-c/nodePools/pool: unrecoverable error",
 		},
 		{
 			desc: "NodePool upgrade in progress",
 			clients: func(clients *pkg.Clients) *pkg.Clients {
-				clients.Container.(*test.FakeContainer).UpdateNodePoolErr = errors.New("operation: operation-abc-123 already in progress")
+				clients.Container.(*test.FakeContainer).UpdateNodePoolResps = []*container.Operation{
+					nil,
+					{Status: test.OperationDone},
+				}
+				clients.Container.(*test.FakeContainer).UpdateNodePoolErrs = []error{
+					errors.New("Operation operation-abc-123 is currently upgrading node pool"),
+					nil,
+				}
 				return clients
 			}(test.DefaultClients()),
 			wantLog: "upgraded",
@@ -244,7 +251,7 @@ func TestNodePoolMigrator_Migrate(t *testing.T) {
 		{
 			desc: "Polling failure during UpdateNodePool operation",
 			clients: func(clients *pkg.Clients) *pkg.Clients {
-				clients.Container.(*test.FakeContainer).GetOperationErr = errors.New("operation get failed")
+				clients.Container.(*test.FakeContainer).GetOperationErrs = []error{errors.New("operation get failed")}
 				return clients
 			}(test.DefaultClients()),
 			wantErr: "error retrieving Operation projects/test-project/locations/region-a/operations/operation-update-nodepool: operation get failed",
@@ -252,10 +259,12 @@ func TestNodePoolMigrator_Migrate(t *testing.T) {
 		{
 			desc: "UpdateNodePool operation failure",
 			clients: func(clients *pkg.Clients) *pkg.Clients {
-				clients.Container.(*test.FakeContainer).GetOperationResp = &container.Operation{
-					Name:   "op",
-					Status: test.OperationDone,
-					Error:  &container.Status{Message: "operation failed"},
+				clients.Container.(*test.FakeContainer).GetOperationResps = []*container.Operation{
+					{
+						Name:   "op",
+						Status: test.OperationDone,
+						Error:  &container.Status{Message: "operation failed"},
+					},
 				}
 				return clients
 			}(test.DefaultClients()),

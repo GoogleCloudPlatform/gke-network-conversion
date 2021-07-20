@@ -108,6 +108,10 @@ func (m *nodePoolMigrator) Validate(_ context.Context) error {
 
 // Migrate performs a NodePool upgrade is deemed necessary.
 func (m *nodePoolMigrator) Migrate(ctx context.Context) error {
+	return operations.WaitForOperationInProgress(ctx, m.migrate, m.wait)
+}
+
+func (m *nodePoolMigrator) migrate(ctx context.Context) error {
 	if !m.upgradeRequired {
 		log.Infof("Upgrade not required for NodePool %s; skipping upgrade.", m.ResourcePath())
 		return nil
@@ -115,10 +119,10 @@ func (m *nodePoolMigrator) Migrate(ctx context.Context) error {
 
 	log.Infof("Upgrading NodePool %s to version %q", m.ResourcePath(), m.resolvedDesiredNodeVersion)
 
-	return m.migrate(ctx)
+	return m.upgrade(ctx)
 }
 
-func (m *nodePoolMigrator) migrate(ctx context.Context) error {
+func (m *nodePoolMigrator) upgrade(ctx context.Context) error {
 	npp := m.ResourcePath()
 	req := &container.UpdateNodePoolRequest{
 		Name:        npp,
@@ -127,23 +131,19 @@ func (m *nodePoolMigrator) migrate(ctx context.Context) error {
 
 	op, err := m.clients.Container.UpdateNodePool(ctx, req)
 	if err != nil {
-		original := err
-		name := pkg.OperationsPath(m.projectID, m.cluster.Location, operations.ObtainID(err))
-		if op, err = m.clients.Container.GetOperation(ctx, name); err != nil {
-			return fmt.Errorf("error upgrading NodePool %s: %w", npp, original)
-		}
+		return fmt.Errorf("error upgrading NodePool %s: %w", npp, err)
 	}
 
-	path := pkg.PathRegex.FindString(op.SelfLink)
-	log.Infof("Upgrade in progress for NodePool %s; operation: %s", npp, path)
+	opPath := pkg.PathRegex.FindString(op.SelfLink)
+	log.Infof("Upgrade in progress for NodePool %s; operation: %s", npp, opPath)
 
 	w := &ContainerOperation{
 		ProjectID: m.projectID,
-		Path:      path,
+		Path:      opPath,
 		Client:    m.clients.Container,
 	}
 	if err := m.handler.Wait(ctx, w); err != nil {
-		return fmt.Errorf("error waiting on Operation %s: %w", path, err)
+		return fmt.Errorf("error waiting on Operation %s: %w", opPath, err)
 	}
 
 	log.Infof("NodePool %s upgraded. ", npp)
