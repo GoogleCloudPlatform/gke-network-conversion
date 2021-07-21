@@ -115,11 +115,11 @@ func TestNodePoolMigrator_Validate(t *testing.T) {
 		{
 			desc:       "Fail - outside version skew",
 			ctx:        context.Background(),
-			npDesired:  "1.19.10-gke.1700",
-			npResolved: "1.19.10-gke.1700",
-			npCurrent:  "1.17.17-gke.9100",
-			cpVersion:  "1.17.17-gke.9100",
-			wantErr:    "must be within 1 minor versions of desired control plane version",
+			npDesired:  "1.17.17-gke.8200",
+			npResolved: "1.17.17-gke.8200",
+			npCurrent:  "1.19.17-gke.9100",
+			cpVersion:  "1.19.17-gke.9100",
+			wantErr:    "desired node version 1.17.17-gke.8200 must be no less than 1 minor versions from the desired control plane version 1.19.17-gke.9100",
 		},
 	}
 	for _, tc := range cases {

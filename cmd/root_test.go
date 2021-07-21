@@ -24,11 +24,12 @@ import (
 	"testing"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	"legacymigration/pkg"
 	"legacymigration/pkg/clusters"
 	"legacymigration/pkg/migrate"
 	"legacymigration/test"
+
+	log "github.com/sirupsen/logrus"
 )
 
 func TestMigrateOptions_ValidateFlagsNoProject(t *testing.T) {
@@ -138,7 +139,16 @@ func TestMigrateOptions_ValidateFlags(t *testing.T) {
 				o.desiredNodeVersion = "1.17"
 				return o
 			}(defaultOptions()),
-			want: "must be within 1 minor versions of desired control plane version",
+			want: "desired node version 1.17 must be no less than 1 minor versions from the desired control plane version 1.19",
+		},
+		{
+			desc: "Node version greater than control plane version",
+			opts: func(o migrateOptions) migrateOptions {
+				o.desiredControlPlaneVersion = "1.17"
+				o.desiredNodeVersion = "1.18"
+				return o
+			}(defaultOptions()),
+			want: "desired node version 1.18 minor version (18) cannot be greater than desired control plane version 1.17 minor version (17)",
 		},
 		{
 			desc: "Invalid control plane format",
