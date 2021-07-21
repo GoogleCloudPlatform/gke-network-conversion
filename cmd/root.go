@@ -128,7 +128,7 @@ the clusters are compatible with a VPC network.`,
 For more information, see https://cloud.google.com/kubernetes-engine/versioning#versioning_scheme
 Note:
   This version must be equal to or greater than the lowest control plane version on the network.`)
-	flags.StringVar(&o.desiredNodeVersion, desiredNodeVersionFlag, o.desiredNodeVersion,
+	flags.StringVar(&o.desiredNodeVersion, desiredNodeVersionFlag, clusters.DefaultVersion,
 		`Desired GKE version for all cluster nodes. For more information, see https://cloud.google.com/kubernetes-engine/versioning#versioning_scheme
 Note:
   This version must be greater than the lowest node pool version on the network as node pools cannot be upgraded in-place.`)
@@ -144,7 +144,6 @@ Note:
 
 	cmd.MarkFlagRequired(projectFlag)
 	cmd.MarkFlagRequired(networkFlag)
-	cmd.MarkFlagRequired(desiredNodeVersionFlag)
 	flags.MarkHidden(containerBasePathFlag)
 
 	return cmd
@@ -331,7 +330,7 @@ func fetchClients(ctx context.Context, basePath string, authedClient *http.Clien
 func retryPolicy() func(ctx context.Context, resp *http.Response, err error) (bool, error) {
 	return func(ctx context.Context, resp *http.Response, err error) (bool, error) {
 		shouldRetry, newErr := retryablehttp.DefaultRetryPolicy(ctx, resp, err)
-		if newErr != nil || shouldRetry == true {
+		if newErr != nil || shouldRetry {
 			return shouldRetry, newErr
 		}
 
