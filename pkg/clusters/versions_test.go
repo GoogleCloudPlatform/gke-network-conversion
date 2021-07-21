@@ -19,10 +19,11 @@ import (
 	"bytes"
 	"testing"
 
+	"legacymigration/test"
+
 	"github.com/google/go-cmp/cmp"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/api/container/v1"
-	"legacymigration/test"
 )
 
 var (
@@ -319,16 +320,16 @@ func TestIsWithinVersionSkew(t *testing.T) {
 		},
 		{
 			desc:      "Node pool within version skew",
-			npVersion: "1.22",
-			cpVersion: "1.21",
+			npVersion: "1.21",
+			cpVersion: "1.22",
 			skew:      MaxVersionSkew,
 		},
 		{
 			desc:      "Node pool beyond version skew",
-			npVersion: "1.23",
-			cpVersion: "1.21",
+			npVersion: "1.21",
+			cpVersion: "1.23",
 			skew:      MaxVersionSkew,
-			wantErr:   "must be within 1 minor versions of desired control plane version",
+			wantErr:   "desired node version 1.21 must be no less than 1 minor versions from the desired control plane version 1.23",
 		},
 		{
 			desc:      "Node pool within version skew",
@@ -353,7 +354,13 @@ func TestIsWithinVersionSkew(t *testing.T) {
 			npVersion: "1.21",
 			cpVersion: "1.24",
 			skew:      2,
-			wantErr:   "must be within 2 minor versions of desired control plane version",
+			wantErr:   "desired node version 1.21 must be no less than 2 minor versions from the desired control plane version 1.24",
+		},
+		{
+			desc:      "Node pool version beyond control plane",
+			npVersion: "1.22",
+			cpVersion: "1.21",
+			wantErr:   "desired node version 1.22 minor version (22) cannot be greater than desired control plane version 1.21 minor version (21)",
 		},
 	}
 	for _, tc := range cases {

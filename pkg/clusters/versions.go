@@ -21,8 +21,9 @@ import (
 	"strconv"
 	"strings"
 
-	"google.golang.org/api/container/v1"
 	"legacymigration/pkg"
+
+	"google.golang.org/api/container/v1"
 )
 
 type Resource int
@@ -174,8 +175,13 @@ func IsWithinVersionSkew(npVersion, cpVersion string, allowedSkew int) error {
 		return err
 	}
 
-	if abs(npMinor-cpMinor) > allowedSkew {
-		return fmt.Errorf("desired node version %s must be within %d minor versions of desired control plane version %s",
+	diff := cpMinor - npMinor
+	if diff < 0 {
+		return fmt.Errorf("desired node version %s minor version (%d) cannot be greater than desired control plane version %s minor version (%d)",
+			npVersion, npMinor, cpVersion, cpMinor)
+	}
+	if diff > allowedSkew {
+		return fmt.Errorf("desired node version %s must be no less than %d minor versions from the desired control plane version %s",
 			npVersion, allowedSkew, cpVersion)
 	}
 
@@ -214,8 +220,8 @@ func resolveVersion(desired, def string, valid []string) (string, error) {
 	return "", fmt.Errorf("desired version %q could not be resolved; valid versions: %v", desired, valid)
 }
 
-// getMajorMinorVersion gets the k8s minor version as an int.
-// getMajorMinorVersion assumes validation has already been performed on the input.
+// GetMinorVersion gets the k8s minor version as an int.
+// GetMinorVersion assumes validation has already been performed on the input.
 func GetMinorVersion(v string) (int, error) {
 	split := strings.Split(v, ".")
 	return strconv.Atoi(split[1])
@@ -228,12 +234,4 @@ func getReleaseChannel(rc *container.ReleaseChannel) string {
 		return rc.Channel
 	}
 	return pkg.Unspecified
-}
-
-// abs returns the absolute value of x.
-func abs(x int) int {
-	if x < 0 {
-		return -x
-	}
-	return x
 }
