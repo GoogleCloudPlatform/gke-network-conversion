@@ -9,7 +9,8 @@ after the conversion.
 This repository contains a single script which converts legacy networks to VPC
 networks and performs the necessary GKE control plane and node pool upgrades.
 
-For more information on VPC and legacy networks, see [VPC network overview] and [Legacy networks], respectively.
+For more information on VPC and legacy networks, see [VPC network overview] and
+[Legacy networks], respectively.
 
 [VPC network overview]: https://cloud.google.com/vpc/docs/vpc
 [Legacy networks]: https://cloud.google.com/vpc/docs/legacy
@@ -48,17 +49,20 @@ make all
 
 ## Execution
 
-Warning: We recommend that you run the conversion tool within a maintenance window.
-For more information, see [Maintenance windows and exclusions].
+> **Note**: We recommend that you run the conversion tool within a maintenance window.
+> For more information, see [Maintenance windows and exclusions].
 
-The script takes the following input: the name of a network to convert and the control plane and
-node versions that you want to upgrade to. The script validates that all underlying resources of
-the network should and can be upgraded. If validation fails for any underlying resource, no
-resource - including the network - is modified.
+The script takes the following input: the name of a network to convert and the control
+plane and node versions that you want to upgrade to. The script validates that all underlying
+resources of the network should and can be upgraded. If validation fails for any underlying
+resource, no resource - including the network - is modified.
 
 For the full list of script arguments and options, use the `--help` flag.
 
-Example script execution:
+> **Best practice**: Before performing conversion, run the script in validation-only
+> mode (`--validate-only=true`) and review the output.
+
+Example script execution to convert the network and clusters:
 
 ```shell
 gkeconvert                                        \
@@ -68,6 +72,9 @@ gkeconvert                                        \
  --node-version=<NODE_VERSION>                   \
  --validate-only=false
 ```
+
+> **Note**: The default version alias for the node pool (`--node-version="-"`) will
+> match the desired node pool version to the desired control plane version.
 
 Review any execution errors before you attempt to convert the network again to ensure
 that any reported errors are transient. For errors during the network conversion, see
@@ -86,7 +93,7 @@ The network upgrade is skipped, and the script proceeds to upgrade the cluster(s
 
 ## Cluster upgrade options
 
-Note: The script does not allow for downgrading a control plane, or a node pool version.
+> **Note**: The script does not allow for downgrading a control plane or a node pool version.
 
 The options for the desired control plane and node pool versions accept version
 aliases. See [cluster.UpdateMaster] and [nodePools.Update] for syntax and behavior.
