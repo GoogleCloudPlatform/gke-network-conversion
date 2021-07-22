@@ -36,12 +36,12 @@ The script uses Application Default Credentials for authentication.
 If not already done, install the gcloud CLI from <https://cloud.google.com/sdk/> and
 run `gcloud auth application-default login`.
 
-For more information, see [Authenticating as a service account]
+For more information, see [Authenticating as a service account].
 
 To get started, clone this repo and build the binary:
 
 ```shell
-git clone https://github.com/GoogleCloudPlatform/legacy-network-migration && cd $(basename $_ .git)
+git clone git@github.com:GoogleCloudPlatform/legacy-network-migration.git && cd $(basename $_ .git)
 make all
 ```
 
