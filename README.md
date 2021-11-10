@@ -41,7 +41,7 @@ For more information, see [Authenticating as a service account].
 To get started, clone this repo and build the binary:
 
 ```shell
-git clone git@github.com:GoogleCloudPlatform/legacy-network-migration.git && cd $(basename $_ .git)
+git clone git@github.com:GoogleCloudPlatform/gke-network-conversionn.git && cd $(basename $_ .git)
 make all
 ```
 
@@ -65,7 +65,7 @@ For the full list of script arguments and options, use the `--help` flag.
 Example script execution to convert the network and clusters:
 
 ```shell
-gkeconvert                                        \
+gkeconvert                                       \
  --project=<PROJECT_ID>                          \
  --network=<NETWORK_NAME>                        \
  --control-plane-version=<CONTROL_PLANE_VERSION> \
