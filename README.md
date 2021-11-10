@@ -41,7 +41,7 @@ For more information, see [Authenticating as a service account].
 To get started, clone this repo and build the binary:
 
 ```shell
-git clone git@github.com:GoogleCloudPlatform/gke-network-conversionn.git && cd $(basename $_ .git)
+git clone https://github.com/GoogleCloudPlatform/gke-network-conversion.git && cd $(basename $_ .git)
 make all
 ```
 
