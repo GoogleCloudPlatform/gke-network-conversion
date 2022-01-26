@@ -36,7 +36,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/oauth2/google"
-	computealpha "google.golang.org/api/compute/v0.alpha"
+	computebeta "google.golang.org/api/compute/v0.beta"
 	"google.golang.org/api/compute/v1"
 	"google.golang.org/api/container/v1"
 	"google.golang.org/api/option"
@@ -308,9 +308,9 @@ func fetchClients(ctx context.Context, basePath string, authedClient *http.Clien
 		return nil, err
 	}
 
-	// Retry for up-to 5 minutes for Compute Alpha API calls.
-	alphaOpt := getRetryableClientOption(5, 5*time.Second, 160*time.Second, authedClient)
-	computeServiceAlpha, err := computealpha.NewService(ctx, alphaOpt)
+	// Retry for up-to 5 minutes for Compute Beta API calls.
+	betaOpt := getRetryableClientOption(5, 5*time.Second, 160*time.Second, authedClient)
+	computeServiceBeta, err := computebeta.NewService(ctx, betaOpt)
 	if err != nil {
 		return nil, err
 	}
@@ -321,7 +321,7 @@ func fetchClients(ctx context.Context, basePath string, authedClient *http.Clien
 	return &pkg.Clients{
 		Compute: &pkg.Compute{
 			V1:    computeService,
-			Alpha: computeServiceAlpha,
+			Beta: computeServiceBeta,
 		},
 		Container: &pkg.Container{V1: containerService},
 	}, nil
