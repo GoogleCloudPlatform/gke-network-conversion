@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"regexp"
 
-	computealpha "google.golang.org/api/compute/v0.alpha"
+	computebeta "google.golang.org/api/compute/v0.beta"
 	"google.golang.org/api/compute/v1"
 	"google.golang.org/api/container/v1"
 	"google.golang.org/api/googleapi"
@@ -103,7 +103,7 @@ type ContainerService interface {
 
 type Compute struct {
 	V1    *compute.Service
-	Alpha *computealpha.Service
+	Beta *computebeta.Service
 }
 
 func (c *Compute) GetInstanceGroupManager(ctx context.Context, project, location, instanceGroupManager string, opts ...googleapi.CallOption) (*compute.InstanceGroupManager, error) {
@@ -117,9 +117,9 @@ func (c *Compute) GetInstanceTemplate(ctx context.Context, project, instanceTemp
 	return c.V1.InstanceTemplates.Get(project, instanceTemplate).Context(ctx).Do(opts...)
 }
 
-// SwitchToCustomMode transparently uses computealpha.Service.SwitchToCustomMode.
+// SwitchToCustomMode transparently uses computebeta.Service.SwitchToCustomMode.
 func (c *Compute) SwitchToCustomMode(ctx context.Context, project, name string, opts ...googleapi.CallOption) (*compute.Operation, error) {
-	resp, err := c.Alpha.Networks.SwitchToCustomMode(project, name).Context(ctx).Do(opts...)
+	resp, err := c.Beta.Networks.SwitchToCustomMode(project, name).Context(ctx).Do(opts...)
 	if err != nil {
 		return nil, err
 	}
